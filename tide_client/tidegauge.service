@@ -1,0 +1,17 @@
+[Unit]
+Description=Tide Gauge Service
+After=syslog.target
+After=network.target
+
+[Service]
+RestartSec=2s
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/tide/
+
+ExecStart=/home/pi/tide/tide_client
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

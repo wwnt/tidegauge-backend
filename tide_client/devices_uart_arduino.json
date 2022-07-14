@@ -1,0 +1,23 @@
+{
+	"port": "/dev/tty.usb-1.4",
+	"read_timeout": 2000,
+	"mode": {
+		"baud_rate": 9600,
+		"data_bits": 8,
+		"parity": 0
+	},
+	"model": "arduino",
+	"config": {
+		"sdi12": [],
+		"analog": [
+			{
+				"device_name": "地点1雨探测器",
+				"model": "DRD11A",
+				"pin": 14,
+				"cron": "@every 10s",
+				"item_name": "location1_rain_intensity",
+				"item_type": "rain_intensity"
+			}
+		]
+	}
+}

@@ -1,0 +1,58 @@
+[
+    {
+        "identifier": "station1",
+        "devices": {
+            "地点1压力水位计": {
+                "water_conductivity": "location1_water_conductivity",
+                "water_level": "location1_water_level",
+                "water_salinity": "location1_water_salinity",
+                "water_temperature": "location1_water_temperature",
+                "water_total_dissolved_solids": "location1_water_total_dissolved_solids"
+            },
+            "地点1温湿度": {
+                "air_humidity": "location1_air_humidity",
+                "air_temperature": "location1_air_temperature"
+            },
+            "地点1能见度": {
+                "air_visibility": "location1_air_visibility"
+            },
+            "地点1雨探测器": {
+                "precipitation_detection": "location1_precipitation_detection",
+                "rain_intensity": "location1_rain_intensity"
+            },
+            "地点1雷达液位计": {
+                "water_distance": "location1_radar_water_distance"
+            },
+            "地点1风": {
+                "wind_direction": "location1_wind_direction",
+                "wind_speed": "location1_wind_speed"
+            },
+            "地点1浮子水位计": {
+                "water_distance": "location1_water_distance"
+            }
+        },
+        "cameras": [
+            "2L0130FPAA00286",
+            "摄像头2"
+        ]
+    },
+    {
+        "location1_air_humidity": 1635814528235,
+        "location1_air_temperature": 1635814528235,
+        "location1_air_visibility": 1635814498155,
+        "location1_precipitation_detection": 1634234770638,
+        "location1_radar_water_distance": 1635814518088,
+        "location1_rain_intensity": 1635814530010,
+        "location1_water_conductivity": 1635814523615,
+        "location1_water_distance": 1635814499980,
+        "location1_water_level": 1635814523615,
+        "location1_water_salinity": 1635814523615,
+        "location1_water_temperature": 1635814523615,
+        "location1_water_total_dissolved_solids": 1635814523615,
+        "location1_wind_direction": 1635814528287,
+        "location1_wind_speed": 1635814528287
+    },
+    3332,
+    {},
+    null
+]

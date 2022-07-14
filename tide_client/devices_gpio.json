@@ -1,0 +1,21 @@
+{
+    "name": "gpiochip0",
+    "config": [
+        {
+            "model": "RG13",
+            "config": {
+                "device_name": "地点1雨量",
+                "pin": 4,
+                "item_name": "location1_rain_gauge"
+            }
+        },
+        {
+            "model": "DRD11A",
+            "config": {
+                "device_name": "地点1雨探测器",
+                "pin": 5,
+                "item_name": "location1_precipitation_detection"
+            }
+        }
+    ]
+}

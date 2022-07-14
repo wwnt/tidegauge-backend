@@ -1,0 +1,36 @@
+{
+    "config": [
+        {
+            "model": "uartTestDevice",
+            "config": {
+                "device_name": "rs485_1",
+                "addr": "1",
+                "cron": "@every 1s",
+                "items": {
+                    "air_humidity": "item1",
+                    "air_temperature": "item2"
+                }
+            }
+        },
+        {
+            "model": "uartTestDevice",
+            "config": {
+                "device_name": "rs485_2",
+                "addr": "2",
+                "cron": "@every 30s",
+                "items": {
+                    "air_humidity": "item3",
+                    "air_temperature": "item4"
+                }
+            }
+        },
+        {
+            "model": "gpioTestDevice",
+            "config": {
+                "device_name": "gpio1",
+                "pin": 4,
+                "item_name": "item5"
+            }
+        }
+    ]
+}

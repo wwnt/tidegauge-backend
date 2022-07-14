@@ -1,0 +1,29 @@
+{
+    "bus_number": 1,
+    "config": [
+        {
+            "model": "ads1115",
+            "config": {
+                "addr": 71,
+                "items": [
+                    {
+                        "channel": 4,
+                        "device_name": "地点1雨探测器",
+                        "model": "DRD11A",
+                        "cron": "@every 10s",
+                        "item_type": "rain_intensity",
+                        "item_name": "location1_rain_intensity"
+                    },
+                    {
+                        "channel": 5,
+                        "device_name": "地点2雨探测器",
+                        "model": "DRD11A",
+                        "cron": "@every 10s",
+                        "item_type": "rain_intensity",
+                        "item_name": "location1_rain_intensity"
+                    }
+                ]
+            }
+        }
+    ]
+}
