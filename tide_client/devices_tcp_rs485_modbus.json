@@ -1,0 +1,16 @@
+{
+	"addr": "192.168.1.23:8887",
+	"read_timeout": 1000,
+	"model": "uart-rs485",
+	"config": [
+		{
+			"model": "VEGAPULS61",
+			"config": {
+				"device_name": "地点1雷达液位计",
+				"cron": "@every 20s",
+				"addr": 246,
+				"item_name": "location1_radar_water_distance"
+			}
+		}
+	]
+}

@@ -1,0 +1,40 @@
+{
+    "listen": ":7100",
+    "tide": {
+        "listen": ":7102",
+        "camera": {
+            "storage": "",
+            "latest_snapshot_count": 9
+        }
+    },
+    "smtp": {
+        "host": "",
+        "port": 587,
+        "username": "",
+        "password": "123456"
+    },
+    "keycloak": {
+        "base_path": "http://localhost:8080",
+        "master_username": "admin",
+        "master_password": "admin123!",
+        "realm": "tgm",
+        "client_id": "tgm-client",
+        "client_secret": ""
+    },
+    "db": {
+        "tide": {
+            "host": "localhost",
+            "port": "5432",
+            "user": "postgres",
+            "password": "123456",
+            "dbname": "tide_gauge"
+        },
+        "sea": {
+            "host": "localhost",
+            "port": "5432",
+            "user": "postgres",
+            "password": "123456",
+            "dbname": "sate_altimetry"
+        }
+    }
+}

@@ -1,0 +1,45 @@
+{
+    "port": "/dev/tty.usb-1.4",
+    "read_timeout": 1000,
+    "mode": {
+        "baud_rate": 9600,
+        "data_bits": 7,
+        "parity": 2
+    },
+    "model": "uart-rs485",
+    "config": [
+        {
+            "model": "PWD50",
+            "config": {
+                "device_name": "地点1能见度",
+                "cron": "@every 1m",
+                "addr": "1",
+                "item_name": "location1_air_visibility"
+            }
+        },
+        {
+            "model": "WMT700",
+            "config": {
+                "device_name": "地点1风",
+                "addr": "2",
+                "cron": "@every 30s",
+                "items": {
+                    "wind_speed": "location1_wind_speed",
+                    "wind_direction": "location1_wind_direction"
+                }
+            }
+        },
+        {
+            "model": "HMP155",
+            "config": {
+                "device_name": "地点1温湿度",
+                "addr": "5",
+                "cron": "@every 30s",
+                "items": {
+                    "air_humidity": "location1_air_humidity",
+                    "air_temperature": "location1_air_temperature"
+                }
+            }
+        }
+    ]
+}
