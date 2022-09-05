@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgconn"
 	"net/http"
 	"net/url"
+	"strings"
 	"tide/tide_server/auth"
 )
 
@@ -62,7 +63,7 @@ func (k *Keycloak) GetLoginUser(r *http.Request) (string, error) {
 	values.Set("token", token)
 	values.Set("client_id", k.clientId)
 	values.Set("client_secret", k.clientSecret)
-	resp, err := http.PostForm(k.basePath+"/auth/realms/"+k.realm+"/protocol/openid-connect/token/introspect", values)
+	resp, err := http.PostForm(k.basePath+"/realms/"+k.realm+"/protocol/openid-connect/token/introspect", values)
 	if err != nil {
 		return "", err
 	}
@@ -135,6 +136,9 @@ func (k *Keycloak) AddUser(user auth.User) error {
 	if user.Username == "" || user.Password == "" {
 		return auth.ErrUserEmpty
 	}
+	// Username and email can only be in lowercase
+	user.Username = strings.ToLower(user.Username)
+	user.Email = strings.ToLower(user.Email)
 	tx, err := k.db.Begin()
 	if err != nil {
 		return err
@@ -307,10 +311,11 @@ func (k *Keycloak) DelUser(username string) (err error) {
 	}
 	return tx.Commit()
 }
+
 func NewKeycloak(db *sql.DB, basePath, masterUsername, masterPassword, realm, clientId, clientSecret string) *Keycloak {
 	return &Keycloak{
 		db:             db,
-		client:         gocloak.NewClient(basePath),
+		client:         gocloak.NewClient(basePath, gocloak.SetAuthRealms("realms"), gocloak.SetAuthAdminRealms("admin/realms")),
 		basePath:       basePath,
 		masterUsername: masterUsername,
 		masterPassword: masterPassword,

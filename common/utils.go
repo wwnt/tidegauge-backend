@@ -2,8 +2,8 @@ package common
 
 import "regexp"
 
-var evilItemNameReg = regexp.MustCompile("[^0-9a-z_]")
+var illegalCharacterReg = regexp.MustCompile("[^0-9a-z_]")
 
-func EvilItemName(name string) bool {
-	return evilItemNameReg.MatchString(name)
+func ContainsIllegalCharacter(name string) bool {
+	return illegalCharacterReg.MatchString(name)
 }

@@ -50,8 +50,8 @@ func GetItems(stationId uuid.UUID) ([]Item, error) {
 }
 
 func MakeSureTableExist(name string) (err error) {
-	if common.EvilItemName(name) {
-		return errors.New("evil table name: " + name)
+	if common.ContainsIllegalCharacter(name) {
+		return errors.New("Table name contains illegal characters: " + name)
 	}
 	var n int
 	err = TideDB.QueryRow("select count(to_regclass($1))", name).Scan(&n)

@@ -13,7 +13,7 @@ import (
 func GetItemsLatest(stationId uuid.UUID, itemsLatest common.StringMsecMap) error {
 	var t sql.NullTime
 	for itemName := range itemsLatest {
-		if common.EvilItemName(itemName) {
+		if common.ContainsIllegalCharacter(itemName) {
 			return errors.New("evil table name: " + itemName)
 		}
 		err := TideDB.QueryRow("select max(timestamp) from "+itemName+" where station_id=$1", stationId).Scan(&t)
@@ -31,8 +31,8 @@ func GetItemsLatest(stationId uuid.UUID, itemsLatest common.StringMsecMap) error
 }
 
 func GetDataHistory(stationId uuid.UUID, itemName string, start, end custype.TimeMillisecond) ([]common.DataTimeStruct, error) {
-	if common.EvilItemName(itemName) {
-		return nil, errors.New("evil table name: " + itemName)
+	if common.ContainsIllegalCharacter(itemName) {
+		return nil, errors.New("Table name contains illegal characters: " + itemName)
 	}
 	var (
 		err error
@@ -73,16 +73,16 @@ func GetDataHistory(stationId uuid.UUID, itemName string, start, end custype.Tim
 }
 
 func SaveDataHistory(stationId uuid.UUID, itemName string, itemValue float64, tm time.Time) (int64, error) {
-	if common.EvilItemName(itemName) {
-		return 0, errors.New("evil table name: " + itemName)
+	if common.ContainsIllegalCharacter(itemName) {
+		return 0, errors.New("Table name contains illegal characters: " + itemName)
 	}
 	res, err := TideDB.Exec(`insert into `+itemName+` (station_id, value, timestamp) VALUES ($1,$2,$3) on conflict do nothing`, stationId, itemValue, tm)
 	return checkResult(res, err)
 }
 
 func GetLatestDataTime(stationId uuid.UUID, itemName string) (ts custype.TimeMillisecond, err error) {
-	if common.EvilItemName(itemName) {
-		return 0, errors.New("evil table name: " + itemName)
+	if common.ContainsIllegalCharacter(itemName) {
+		return 0, errors.New("Table name contains illegal characters: " + itemName)
 	}
 	err = TideDB.QueryRow("select timestamp from "+itemName+" where station_id=$1 order by timestamp desc limit 1", stationId).Scan(&ts)
 	if err != nil && err == sql.ErrNoRows {

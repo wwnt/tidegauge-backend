@@ -84,7 +84,7 @@ func addDevices() {
 			if _, ok := tmp[name]; ok {
 				global.Log.Fatalf("Duplicate item_name: %v, device_name: %v, type: %v", name, deviceName, typ)
 			} else {
-				if common.EvilItemName(name) {
+				if common.ContainsIllegalCharacter(name) {
 					global.Log.Fatalf("evil item name: %s, only allow [0-9A-Za-z_]", name)
 				}
 				tmp[name] = struct{}{}

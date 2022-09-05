@@ -41,8 +41,8 @@ type SateAltimetry struct {
 }
 
 func GetSateAltimetry(tn string) (interface{}, error) {
-	if common.EvilItemName(tn) {
-		return nil, errors.New("evil table name: " + tn)
+	if common.ContainsIllegalCharacter(tn) {
+		return nil, errors.New("Table name contains illegal characters: " + tn)
 	}
 	rows, err := seaDB.Query("select lat, lon, sealevel from " + tn)
 	if err != nil {

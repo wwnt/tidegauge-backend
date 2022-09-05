@@ -1,13 +1,18 @@
 {
 	"listen": "localhost:7100",
 	"server": "192.168.5.4:7102",
-	"identifier": "station2",
+	"identifier": "station1",
 	"devices": {
-		"uart": [],
-		"gpio": [],
+		"uart": [
+			"devices_uart_arduino.json",
+			"devices_uart_rs485.json"
+		],
 		"tcp": [
 			"devices_tcp_ttl_arduino.json",
 			"devices_tcp_rs485_modbus.json"
+		],
+		"gpio": [
+			"devices_gpio.json"
 		]
 	},
 	"db": {
