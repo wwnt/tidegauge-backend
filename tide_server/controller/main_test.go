@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 	zap.ReplaceGlobals(logger)
 
 	test.InitDB()
-	test.InitKeycloak()
+	test.InitKeycloak(test.AdminUsername, test.AdminPassword, true)
 	Init()
 	router = setupRouter()
 	testServer = httptest.NewServer(router)
@@ -98,7 +98,7 @@ var (
 	}
 
 	user01 = auth.User{
-		UserBaseInfo: auth.UserBaseInfo{Username: "user01", Password: test.Password, Email: ""},
+		UserBaseInfo: auth.UserBaseInfo{Username: "user01", Password: test.AdminPassword, Email: ""},
 	}
 	permissions = common.UUIDStringsMap{
 		station1.Id: {"location1_air_humidity", "location1_air_visibility"},

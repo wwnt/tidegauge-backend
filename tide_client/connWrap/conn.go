@@ -95,6 +95,7 @@ func (c *ConnUtil) SDI12ConcurrentMeasurement(addr string, extraWakeTime byte, o
 	var input = []byte(addr + "C!")
 	//log.Println(string(input))
 	if c.Typ == "arduino" {
+		// additional Bytes for arduino
 		input = append(input, extraWakeTime, arduinoCommandEnd)
 	}
 

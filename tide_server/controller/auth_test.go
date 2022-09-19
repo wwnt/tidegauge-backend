@@ -36,7 +36,7 @@ func TestWebapi(t *testing.T) {
 	})
 
 	t.Run("login_superAdmin", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodPost, "/login", strings.NewReader("username="+test.TgmAdmin+"&password="+test.Password))
+		req, _ := http.NewRequest(http.MethodPost, "/login", strings.NewReader("username="+test.AdminUsername+"&password="+test.AdminPassword))
 		addPostFormContentHeader(req)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)

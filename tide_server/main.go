@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"flag"
+	"fmt"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"tide/pkg/project"
 	"tide/tide_server/controller"
 	"tide/tide_server/global"
+	"tide/tide_server/test"
 	"time"
 )
 
@@ -18,6 +21,7 @@ func init() {
 }
 
 func main() {
+	initKeycloak := flag.Bool("initKeycloak", false, "initialize keycloak")
 	wkDir := flag.String("dir", ".", "working dir")
 	flag.BoolVar(&global.Config.Debug, "debug", true, "debug mode")
 	cfgName := flag.String("config", "config.json", "Config file")
@@ -28,6 +32,22 @@ func main() {
 	}
 
 	global.ReadConfig(*cfgName)
+
+	if *initKeycloak {
+		scanner := bufio.NewScanner(os.Stdin)
+		fmt.Print("Enter password for tgm-admin: ")
+		var adminPassword string
+		if scanner.Scan() {
+			adminPassword = scanner.Text()
+		}
+
+		if err := scanner.Err(); err != nil {
+			log.Fatal(err)
+		}
+		test.InitKeycloak(test.AdminUsername, adminPassword, false)
+		return
+	}
+
 	initZapLogger()
 	project.RegisterReleaseFunc(func() { _ = zap.L().Sync() })
 

@@ -6,20 +6,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
-	"github.com/robfig/cron/v3"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path"
 	"strconv"
-	"strings"
 	"tide/common"
 	"tide/pkg/custype"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
 	"tide/tide_server/global"
-	"time"
 )
 
 func ListCameraStatusPermission(c *gin.Context) {
@@ -311,64 +308,4 @@ func readLocalStationImgs(stationId uuid.UUID, cameraName string) ([]string, err
 		return nil
 	})
 	return imgs, err
-}
-
-func cameraStorage() {
-	cr := cron.New(cron.WithParser(cron.NewParser(cron.SecondOptional | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)))
-	cr.Start()
-	cameraStorage := global.Config.Tide.Camera.Storage
-	if cameraStorage != "" {
-		deleteFtp := func() {
-			var monthAgo = time.Now().Add(-24 * 30 * time.Hour)
-			dirs, err := os.ReadDir(cameraStorage) //stationIds
-			if err != nil {
-				logger.Error(err.Error())
-				return
-			}
-			for _, dir := range dirs {
-				dirs1, err := os.ReadDir(path.Join(cameraStorage, dir.Name())) //stationId (uuid)
-				if err != nil {
-					logger.Error(err.Error())
-					return
-				}
-				for _, dir1 := range dirs1 {
-					dirs2, err := os.ReadDir(path.Join(cameraStorage, dir.Name(), dir1.Name())) //cameraNames
-					if err != nil {
-						logger.Error(err.Error())
-						return
-					}
-					for _, dir2 := range dirs2 {
-						if dir2.IsDir() {
-							t, err := time.Parse("2006-01-02", dir2.Name())
-							if err != nil {
-								logger.Error(err.Error())
-								continue
-							}
-							if t.Before(monthAgo) {
-								if err = os.RemoveAll(path.Join(cameraStorage, dir.Name(), dir1.Name(), dir2.Name())); err != nil {
-									logger.Error(err.Error())
-								}
-							}
-						} else if path.Ext(dir2.Name()) == ".jpg" {
-							ts, err := strconv.ParseInt(strings.TrimSuffix(dir2.Name(), ".jpg"), 10, 0)
-							if err != nil {
-								logger.Error(err.Error())
-								continue
-							}
-							t := time.UnixMilli(ts)
-							if t.Before(monthAgo) {
-								if err = os.RemoveAll(path.Join(cameraStorage, dir.Name(), dir1.Name(), dir2.Name())); err != nil {
-									logger.Error(err.Error())
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-		deleteFtp()
-		if _, err := cr.AddFunc("@daily", deleteFtp); err != nil {
-			logger.Fatal(err.Error())
-		}
-	}
 }

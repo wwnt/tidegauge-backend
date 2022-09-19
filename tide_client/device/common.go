@@ -47,17 +47,14 @@ type Device interface {
 func AddCronJob(cron string, items map[string]string, provideItems map[string]int, job func() map[string]*float64) {
 	verifyItems(items, provideItems)
 	var (
-		inQuery        int32 = 0
-		tmpData        map[string]*float64
-		itemNameSample string
+		inQuery int32 = 0
+		tmpData map[string]*float64
 	)
-	for _, itemNameSample = range items {
-		break
-	}
+
 	jobWrap := func() {
 		// Determine if this device is being queried
 		if !atomic.CompareAndSwapInt32(&inQuery, 0, 1) {
-			global.Log.Errorf("The query interval is too short. item_name: %+v", itemNameSample)
+			global.Log.Errorf("The query interval is too short. items: %+v", items)
 			return
 		}
 		tmpData = job()
