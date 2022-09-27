@@ -58,9 +58,10 @@ func handleSyncServerConn(conn io.ReadWriteCloser, username string, permissions 
 	}
 
 	defer func() { _ = session.Close() }()
-	// stream1: full sync
-	// stream2: increment sync
-	// stream3: data sync
+	// stream1: increment config sync
+	// stream2: full config sync
+	// stream3: increment data sync
+	// stream4: missing data sync
 	stream1, err := session.Accept()
 	if err != nil {
 		return

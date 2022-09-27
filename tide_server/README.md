@@ -16,7 +16,9 @@
 
 # 2. Install Syncthing
 
-following https://docs.syncthing.net/users/autostart.html
+Following https://docs.syncthing.net/users/autostart.html
+
+or https://github.com/syncthing/syncthing/blob/main/README-Docker.md
 
 # 3. Init postgresql database
 

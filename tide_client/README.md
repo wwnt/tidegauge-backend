@@ -25,7 +25,7 @@
 # 2. Prerequisite
 
 - Ftp server
-- Syncthing
+- Syncthing (Used to synchronize camera photos)
 
 ## 2.1. Ftp Server
 
@@ -35,8 +35,30 @@
 ## 2.2. Syncthing
 
 1. Following https://docs.syncthing.net/users/autostart.html
-2. Add ftp directory to syncthing
-3. Add Service to remote device
+2. Change "gui.address" to `:8384` in `~/.config/syncthing/config.xml`
+
+   ```xml
+   <gui enabled="true" tls="false" debugging="false">
+       <address>:8384</address>
+       <apikey>NfKpteqfsVrTdRKeKdzLoWLcTfeScboy</apikey>
+       <theme>default</theme>
+   </gui>
+   ```
+
+3. Add Service by `Add Remote Device`
+4. Add ftp directory by `Add Folder`
+
+**For example:**
+
+1. Raspberry pi side:
+
+   ![raspberrypi side](../resources/raspi_side_syncthing.png)
+
+2. Server side:
+
+   The server side "Folder Path" must be the "tide.camera.storage" in config.json + station's uuid(get from the **stations** table in the database).
+
+   ![server side](../resources/server_side_syncthing.png)
 
 # 3. Flash Arduino
 
@@ -57,7 +79,7 @@ sqlite> .read tide_client/schema.sql
 # 5. Build client on wsl2 or Linux
 
 ```shell
-# Raspberry Pi OS
+# Raspberry Pi OS (32-bit)
 apt install gcc-arm-linux-gnueabihf
 CC='arm-linux-gnueabihf-gcc' GOARCH='arm' GOARM=7 go build
 

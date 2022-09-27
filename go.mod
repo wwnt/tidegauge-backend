@@ -1,26 +1,26 @@
 module tide
 
-go 1.18
+go 1.19
 
 require (
 	github.com/Nerzal/gocloak/v11 v11.2.0
 	github.com/PuerkitoBio/goquery v1.8.0
 	github.com/albenik/go-serial/v2 v2.5.1
-	github.com/docker/docker v20.10.17+incompatible
+	github.com/docker/docker v20.10.18+incompatible
 	github.com/gin-gonic/gin v1.8.1
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.5.0
-	github.com/hashicorp/yamux v0.0.0-20211028200310-0bc27b27de87
-	github.com/jackc/pgconn v1.12.1
-	github.com/jackc/pgx/v4 v4.16.1
-	github.com/mattn/go-sqlite3 v1.14.14
+	github.com/hashicorp/yamux v0.1.1
+	github.com/jackc/pgconn v1.9.1-0.20210724152538-d89c8390a530
+	github.com/jackc/pgx/v5 v5.0.0
+	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.8.0
 	github.com/warthog618/gpiod v0.8.0
 	github.com/wwnt/modbus v0.1.1
-	go.bug.st/serial v1.3.5
+	go.bug.st/serial v1.4.0
 	go.fuchsia.dev/fuchsia/tools v0.0.0-20210227002403-8023e94b8b78
-	go.uber.org/zap v1.21.0
+	go.uber.org/zap v1.23.0
 	golang.org/x/oauth2 v0.0.0-20220630143837-2104d58473e0
 	golang.org/x/sys v0.0.0-20220704084225-05e143d24a9e
 	periph.io/x/conn/v3 v3.6.10
@@ -50,7 +50,6 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.3.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
-	github.com/jackc/pgtype v1.11.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
@@ -69,7 +68,7 @@ require (
 	github.com/ugorji/go/codec v1.2.7 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
-	golang.org/x/crypto v0.0.0-20220427172511-eb4f295cb31f // indirect
+	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
 	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect

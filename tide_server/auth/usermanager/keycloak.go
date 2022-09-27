@@ -31,6 +31,7 @@ func (k *Keycloak) CheckUserPwd(username, password string) bool {
 		return false
 	}
 }
+
 func (k *Keycloak) Login(r *http.Request, w http.ResponseWriter) {
 	ctx := context.Background()
 	jwt, err := k.client.Login(ctx, k.clientId, k.clientSecret, k.realm, r.PostFormValue("username"), r.PostFormValue("password"))
@@ -42,6 +43,7 @@ func (k *Keycloak) Login(r *http.Request, w http.ResponseWriter) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 }
+
 func (k *Keycloak) Logout(r *http.Request, w http.ResponseWriter) {
 	ctx := context.Background()
 	err := k.client.Logout(ctx, k.clientId, k.clientSecret, k.realm, r.PostFormValue("refresh_token"))
@@ -49,12 +51,20 @@ func (k *Keycloak) Logout(r *http.Request, w http.ResponseWriter) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+const (
+	BearerPrefix    = "Bearer "
+	BearerPrefixLen = len(BearerPrefix)
+)
+
 func (k *Keycloak) GetLoginUser(r *http.Request) (string, error) {
 	var token string
-	if token = r.Header.Get("Authorization"); token != "" {
-		token = token[7:]
+	if token = r.Header.Get("Authorization"); strings.HasPrefix(token, BearerPrefix) {
+		token = token[BearerPrefixLen:]
 	} else if c, err := r.Cookie("token"); err == nil {
 		token = c.Value
+	} else if token = r.URL.Query().Get("token"); token != "" {
+
 	} else {
 		return "", nil
 	}
@@ -193,7 +203,7 @@ func (k *Keycloak) AddUser(user auth.User) error {
 	return tx.Commit()
 }
 
-// EditUserBaseInfo 修改user存储在数据库的信息，keycloak的enabled和password
+// EditUserBaseInfo edit user basic info and password
 func (k *Keycloak) EditUserBaseInfo(user auth.UserBaseInfo) error {
 	if user.Username == "" {
 		return auth.ErrUserEmpty
@@ -204,7 +214,7 @@ func (k *Keycloak) EditUserBaseInfo(user auth.UserBaseInfo) error {
 	} else if n, _ := res.RowsAffected(); n == 0 {
 		return auth.ErrUserNotFound
 	}
-	//修改密码
+	// change password
 	if user.Password != "" {
 		ctx := context.Background()
 		k.token, err = k.client.LoginAdmin(ctx, k.masterUsername, k.masterPassword, "master")
@@ -213,7 +223,7 @@ func (k *Keycloak) EditUserBaseInfo(user auth.UserBaseInfo) error {
 		}
 		kcUser, err := k.getKcUserByUsername(ctx, user.Username)
 		if err != nil {
-			if errors.Is(err, auth.ErrUserNotFound) { // 基本不会发生
+			if errors.Is(err, auth.ErrUserNotFound) { //almost never happens
 				_, _ = k.db.Exec("delete from users where username=$1", user.Username)
 				return err
 			}

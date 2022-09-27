@@ -21,7 +21,7 @@ type PubSub struct {
 
 func NewPubSub() *PubSub {
 	p := new(PubSub)
-	p.writeTimeout = 3 * time.Second
+	p.writeTimeout = time.Second
 	return p
 }
 

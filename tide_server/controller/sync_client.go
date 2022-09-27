@@ -115,6 +115,7 @@ func handleSyncClientConn(conn io.ReadWriteCloser, upstream *upstreamStorage) {
 		for {
 			stream3, err := session.Open()
 			if err != nil {
+				logger.Error(err.Error())
 				return
 			}
 			stream4, err := session.Open()

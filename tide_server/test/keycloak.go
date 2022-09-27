@@ -11,7 +11,7 @@ import (
 
 const (
 	AdminUsername = "tgm-admin"
-	AdminPassword = "123456"
+	AdminPassword = "123456" // Just for test
 )
 
 func InitKeycloak(adminUsername string, adminPassword string, replaceRealm bool) {
@@ -22,6 +22,7 @@ func InitKeycloak(adminUsername string, adminPassword string, replaceRealm bool)
 		log.Fatal(err)
 	}
 createRealm:
+	// Create Keycloak Security Realm for this application
 	_, err = kc.CreateRealm(ctx, token.AccessToken, gocloak.RealmRepresentation{Realm: gocloak.StringP(global.Config.Keycloak.Realm), Enabled: gocloak.BoolP(true)})
 	if err != nil {
 		if apiErr := err.(*gocloak.APIError); apiErr.Code != http.StatusConflict {
@@ -44,17 +45,20 @@ createRealm:
 		},
 	}
 
+	// Create Superuser (Only the very first user)
 	_, err = kc.CreateUser(ctx, token.AccessToken, global.Config.Keycloak.Realm,
 		gocloak.User{Username: gocloak.StringP(adminUsername), Enabled: gocloak.BoolP(true), Credentials: &credentials})
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Create OAuth Client
 	clientId, err := kc.CreateClient(ctx, token.AccessToken, global.Config.Keycloak.Realm, gocloak.Client{ClientID: gocloak.StringP(global.Config.Keycloak.ClientId), DirectAccessGrantsEnabled: gocloak.BoolP(true)})
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Get the Client Secret (Token)
 	credential, err := kc.GetClientSecret(ctx, token.AccessToken, global.Config.Keycloak.Realm, clientId)
 	if err != nil {
 		log.Fatal(err)

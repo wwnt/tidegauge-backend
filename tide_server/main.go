@@ -35,7 +35,7 @@ func main() {
 
 	if *initKeycloak {
 		scanner := bufio.NewScanner(os.Stdin)
-		fmt.Print("Enter password for tgm-admin: ")
+		fmt.Print("Enter password for Superadmin (The first user on install will be the superadmin. A superadmin can adjust other users' privileges, including making them admin.): ")
 		var adminPassword string
 		if scanner.Scan() {
 			adminPassword = scanner.Text()
