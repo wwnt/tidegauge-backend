@@ -12,7 +12,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/yamux v0.1.1
 	github.com/jackc/pgconn v1.9.1-0.20210724152538-d89c8390a530
-	github.com/jackc/pgx/v5 v5.0.0
+	github.com/jackc/pgx/v5 v5.0.1
 	github.com/mattn/go-sqlite3 v1.14.15
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.8.0

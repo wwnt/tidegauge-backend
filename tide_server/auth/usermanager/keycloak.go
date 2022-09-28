@@ -61,10 +61,7 @@ func (k *Keycloak) GetLoginUser(r *http.Request) (string, error) {
 	var token string
 	if token = r.Header.Get("Authorization"); strings.HasPrefix(token, BearerPrefix) {
 		token = token[BearerPrefixLen:]
-	} else if c, err := r.Cookie("token"); err == nil {
-		token = c.Value
 	} else if token = r.URL.Query().Get("token"); token != "" {
-
 	} else {
 		return "", nil
 	}
@@ -156,7 +153,7 @@ func (k *Keycloak) AddUser(user auth.User) error {
 	defer func() {
 		_ = tx.Rollback()
 	}()
-	//如果在数据库添加失败，则直接返回
+	//If the Insert fails in the database, it will return directly
 	_, err = tx.Exec("insert into users(username, role, email, live_camera) values ($1,$2,$3,$4)", user.Username, user.Role, user.Email, user.LiveCamera)
 	if err != nil {
 		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "23505" { //ERROR: duplicate key value violates unique constraint "users_username_uindex" (SQLSTATE 23505)
@@ -164,7 +161,7 @@ func (k *Keycloak) AddUser(user auth.User) error {
 		}
 		return err
 	}
-	// 操作keycloak
+
 	ctx := context.Background()
 	k.token, err = k.client.LoginAdmin(ctx, k.masterUsername, k.masterPassword, "master")
 	if err != nil {
@@ -189,7 +186,7 @@ func (k *Keycloak) AddUser(user auth.User) error {
 			return err
 		}
 		userUUID = *kcUser.ID
-		// 如果已经有一个同名user，那就update，以数据库为准
+		// If there is already a user with the same name, then update
 		if *kcUser.Enabled != enable {
 			*kcUser.Enabled = enable
 			if err = k.client.UpdateUser(ctx, k.token.AccessToken, k.realm, kcUser); err != nil {
@@ -251,7 +248,7 @@ func (k *Keycloak) EditUser(user auth.User) error {
 	} else if n, _ := res.RowsAffected(); n == 0 {
 		return auth.ErrUserNotFound
 	}
-	//修改密码
+	// change password
 	ctx := context.Background()
 	k.token, err = k.client.LoginAdmin(ctx, k.masterUsername, k.masterPassword, "master")
 	if err != nil {
@@ -272,7 +269,7 @@ func (k *Keycloak) EditUser(user auth.User) error {
 	if user.Role >= auth.NormalUser {
 		enable = true
 	}
-	// 如果找到了user，那就update
+	// If this user is found, then update
 	if *kcUser.Enabled != enable {
 		*kcUser.Enabled = enable
 		if err = k.client.UpdateUser(ctx, k.token.AccessToken, k.realm, kcUser); err != nil {
