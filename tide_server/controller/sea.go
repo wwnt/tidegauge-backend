@@ -73,6 +73,7 @@ func IOCHistory(c *gin.Context) {
 
 	if resp.StatusCode != http.StatusOK {
 		c.AbortWithStatus(resp.StatusCode)
+		return
 	}
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {

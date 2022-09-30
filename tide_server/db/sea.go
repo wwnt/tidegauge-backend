@@ -11,7 +11,7 @@ type seaHeight struct {
 }
 
 func GetSeaHeight() (interface{}, error) {
-	rows, err := TideDB.Query("select code, lat, lon, sea_height from tidegauge.public.sea_height_test")
+	rows, err := TideDB.Query("select code, lat, lon, sea_height from sea_height_test")
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ type SonelData struct {
 }
 
 func GetSonelData() (interface{}, error) {
-	rows, err := TideDB.Query(`select sta_id, sta_name, sta_acro, sta_type, sta_etat, sta_pays, sta_lon, sta_lat from staioninfo_tide`)
+	rows, err := TideDB.Query(`select sta_id, sta_name, sta_acro, sta_type, sta_etat, sta_pays, sta_lon, sta_lat from station_info_tide`)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ type PsmslData struct {
 }
 
 func GetPsmslData() (interface{}, error) {
-	rows, err := TideDB.Query(`select "Station Name", id, "Lat", "Lon", "GLOSS ID", "Country", "Date", "Coastline", "Station" from stationinfo_psmsl`)
+	rows, err := TideDB.Query(`select station_name, id, lat, lon, gloss_id, country, date, coastline, station from station_info_psmsl`)
 	if err != nil {
 		return nil, err
 	}
