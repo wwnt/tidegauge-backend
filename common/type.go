@@ -9,7 +9,7 @@ import (
 type Status = string
 type MsgType = uint8
 type StringMsecMap = map[string]custype.TimeMillisecond
-type StringMapMap = map[string]map[string]string
+type StringMapMap = map[string]map[string]string // map[deviceName]map[itemType]itemName
 type UUIDStringsMap = map[uuid.UUID][]string
 
 type StationInfoStruct struct {

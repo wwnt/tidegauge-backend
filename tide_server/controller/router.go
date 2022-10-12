@@ -20,7 +20,7 @@ func setupRouter() *gin.Engine {
 	r.Use(ZapLogger)
 
 	r.GET("/getSeaLevelList", GetSateAltimetry)
-	r.GET("/seaHeightData", GetSeaHeight)
+	r.GET("/seaHeightData", GetSeaLevel)
 	r.GET("/getGlossDataList", GetGlossDataList)
 	r.GET("/getSonelDataList", GetSonelDataList)
 	r.GET("/getPsmslDataList", GetPsmslDataList)
@@ -101,7 +101,7 @@ func ZapLogger(c *gin.Context) {
 	if global.Config.Debug {
 		if _, ok := skipPaths[c.Request.URL.Path]; !ok {
 			latency := time.Now().Sub(start)
-			logger.Debug(c.Request.URL.Path+"?"+c.Request.URL.RawQuery,
+			logger.Debug(c.Request.URL.Path,
 				zap.Int("status", c.Writer.Status()),
 				zap.String("method", c.Request.Method),
 				zap.Duration("latency", latency),

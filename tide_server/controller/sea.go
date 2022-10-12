@@ -22,8 +22,8 @@ func GetSateAltimetry(c *gin.Context) {
 	c.JSON(http.StatusOK, ss)
 }
 
-func GetSeaHeight(c *gin.Context) {
-	ss, err := db.GetSeaHeight()
+func GetSeaLevel(c *gin.Context) {
+	ss, err := db.GetSeaLevel()
 	if err != nil {
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -64,7 +64,7 @@ func IOCHistory(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	resp, err := http.Get("http://www.ioc-sealevelmonitoring.org/bgraph.php?code=" + id + "&output=tab&period=0.5")
+	resp, err := http.Get("https://www.ioc-sealevelmonitoring.org/bgraph.php?code=" + id + "&output=tab&period=0.5")
 	if err != nil {
 		_ = c.AbortWithError(http.StatusInternalServerError, err)
 		return

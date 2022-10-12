@@ -18,10 +18,10 @@ func scheduleRemoveCameraOutdated() {
 }
 
 func removeCameraOutdatedFile(parentPath string, dir os.DirEntry) (retOk bool) {
+	if dir.Name()[0] == '.' { //ignore
+		return
+	}
 	if dir.IsDir() {
-		if dir.Name()[0] == '.' { //ignore
-			return
-		}
 		if t, err := time.Parse("2006-01-02", dir.Name()); err == nil {
 			if t.Before(global.CameraHoldTime) {
 				if err = os.RemoveAll(path.Join(parentPath, dir.Name())); err != nil {
