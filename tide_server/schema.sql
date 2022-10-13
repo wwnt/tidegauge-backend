@@ -112,3 +112,27 @@ create table rpi_status_log
 
 insert into users(username, role, live_camera)
 VALUES ('tgm-admin', 2, true);
+
+create table station_info_gloss_all
+(
+    id                integer          not null,
+    name              varchar          not null,
+    country           varchar          not null,
+    latitude          double precision not null,
+    longitude         double precision not null,
+    latest_psmsl      varchar          not null,
+    latest_psmsl_rlr  varchar          not null,
+    latest_bodc       varchar          not null,
+    latest_sonel      varchar          not null,
+    latest_jasl       varchar          not null,
+    latest_uhslc_fast varchar          not null,
+    latest_vliz       varchar          not null
+);
+
+create table station_sea_level
+(
+    code  varchar          not null,
+    lat   double precision not null,
+    lon   double precision not null,
+    level double precision not null
+);

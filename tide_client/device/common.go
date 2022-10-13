@@ -76,7 +76,6 @@ func AddCronJobWithOneItem(cron string, itemName string, job func() *float64) {
 	}
 	var (
 		inQuery int32 = 0
-		tmpData *float64
 	)
 	jobWrap := func() {
 		// Determine if this device is being queried
@@ -84,9 +83,9 @@ func AddCronJobWithOneItem(cron string, itemName string, job func() *float64) {
 			global.Log.Errorf("The query interval is too short. item_name: %v", itemName)
 			return
 		}
-		tmpData = job()
+		val := job()
 		atomic.StoreInt32(&inQuery, 0)
-		DataReceive <- []itemData{{Typ: common.MsgData, ItemName: itemName, Value: tmpData}}
+		DataReceive <- []itemData{{Typ: common.MsgData, ItemName: itemName, Value: val}}
 	}
 	pkg.Must2(global.CronJob.AddFunc(cron, jobWrap))
 }

@@ -13,6 +13,7 @@ import (
 	"tide/tide_server/auth/usermanager"
 	"tide/tide_server/db"
 	"tide/tide_server/global"
+	"time"
 )
 
 var (
@@ -42,6 +43,14 @@ func Init() {
 	project.RegisterReleaseFunc(db.CloseDB)
 
 	logger = zap.L()
+
+	go func() {
+		for {
+			seaHeight()
+			stationInfoGlossAll()
+			time.Sleep(120 * time.Second)
+		}
+	}()
 
 	userManager = usermanager.NewKeycloak(
 		db.TideDB,

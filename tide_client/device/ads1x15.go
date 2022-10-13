@@ -23,7 +23,6 @@ func (ads1115) NewDevice(conn interface{}, rawConf json.RawMessage) common.Strin
 		Items []struct {
 			Channel    ads1x15.Channel `json:"channel"`
 			DeviceName string          `json:"device_name"`
-			Model      string          `json:"model"`
 			Cron       string          `json:"cron"`
 			ItemType   string          `json:"item_type"`
 			ItemName   string          `json:"item_name"`
