@@ -1,0 +1,15 @@
+{ 
+	"bus_number": 1, 
+	"config": [
+        {
+            "model": "pcf8583",
+            "config": {
+				"addr": 160,
+				"device_name": "pcf8583",
+				"model": "pcf8583",
+				"cron": "@every 5s",
+				"item_name": "counter"
+            }
+        }
+    ]
+}

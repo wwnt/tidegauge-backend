@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"sync"
 	"tide/common"
@@ -115,6 +116,7 @@ func receiveData(dataPub *pubsub.PubSub) {
 			defer dataReceiveMu.Unlock()
 			now = custype.ToTimeMillisecond(time.Now())
 			for _, data := range itemsData {
+				log.Println(data, *data.Value)
 				if data.Typ == common.MsgData {
 					if data.Value == nil {
 						if itemsStatus[data.ItemName].Status != common.Abnormal {
