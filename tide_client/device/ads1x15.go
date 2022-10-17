@@ -2,12 +2,13 @@ package device
 
 import (
 	"encoding/json"
-	"periph.io/x/conn/v3/i2c"
-	"periph.io/x/conn/v3/physic"
-	"periph.io/x/devices/v3/ads1x15"
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/global"
+
+	"periph.io/x/conn/v3/i2c"
+	"periph.io/x/conn/v3/physic"
+	"periph.io/x/devices/v3/ads1x15"
 )
 
 func init() {
@@ -26,8 +27,8 @@ func (ads1115) NewDevice(conn interface{}, rawConf json.RawMessage) common.Strin
 			Cron       string          `json:"cron"`
 			ItemType   string          `json:"item_type"`
 			ItemName   string          `json:"item_name"`
-			ChM	  float64	   `json:"ch_m"`
-			ChB       float64          `json:"ch_b"`
+			ChM        float64         `json:"ch_m"`
+			ChB        float64         `json:"ch_b"`
 		}
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
@@ -48,7 +49,7 @@ func (ads1115) NewDevice(conn interface{}, rawConf json.RawMessage) common.Strin
 				global.Log.Error(err)
 				return nil
 			} else {
-				var f = (float64(sample.V) / float64(physic.Volt)) * ch_m + ch_b
+				var f = (float64(sample.V)/float64(physic.Volt))*ch_m + ch_b
 				return &f
 			}
 		}
