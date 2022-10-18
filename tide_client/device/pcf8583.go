@@ -13,6 +13,15 @@ func init() {
 	RegisterDevice("pcf8583", &pcf8583{})
 }
 
+/**
+ * This code enables the access to PCF8583 Event Mode Counter.<br>
+ * It handles PCF8583 low level reads.<br><br>
+ *
+ * This code is an adaptation of [PCF8583 Event Counter] C Library to Golang.
+ * Original library developed by Xose Pérez, [PCF8583 Real Time Clock and Event Counter] C Library for Arduino.<br>
+ * https://github.com/xoseperez/pcf8583
+ */
+
 type pcf8583 struct{}
 
 func (pcf8583) NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap {
@@ -23,16 +32,18 @@ func (pcf8583) NewDevice(conn interface{}, rawConf json.RawMessage) common.Strin
 		Model      string `json:"model"`
 		Cron       string `json:"cron"`
 		ItemName   string `json:"item_name"`
+		ResetC     bool   `json:"reset_c"`
 	}
 
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 	d := i2c.Dev{Bus: bus, Addr: conf.Addr >> 1} //Saves device, prevents having to specify address everytime. ">> 1" convert to 7 bit.
 	setMode(d, mode_event_counter)
-	log.Println("PCF8583 Mode ", uint8(getMode(d)))
+	log.Printf("PCF8583 Mode 0x%X", uint8(getMode(d)))
 	var job = func() *float64 {
 		var value float64 = float64(getCount(d))
-
-		setCount(d, 0)
+		if conf.ResetC {
+			setCount(d, 0)
+		}
 		return &value
 	}
 	AddCronJobWithOneItem(conf.Cron, conf.ItemName, job)
@@ -47,13 +58,8 @@ func setMode(d i2c.Dev, _mode byte) {
 }
 
 func getMode(d i2c.Dev) uint8 {
-	log.Println("Running getMode")
 	var register_value uint8 = getRegister(d, location_control)
-	log.Printf("% 08b", register_value) // prints 00000000 11111101
 	register_value = register_value & mode_test
-	log.Printf("% 08b", register_value) // prints 00000000 11111101
-	log.Printf("\n")
-
 	return register_value
 }
 
@@ -61,11 +67,11 @@ func getCount(d i2c.Dev) int32 {
 	var readBuffer []byte = []byte{}
 	d.Write([]byte{location_control})
 	readBuffer = Read(d, 0, 4)
-	log.Println("Counter ")
-	for _, n := range readBuffer {
-		log.Printf("% 08b", n) // prints 00000000 11111101
-	}
-	log.Printf("\n")
+	//log.Println("Counter ")
+	//for _, n := range readBuffer {
+	//	log.Printf("% 08b", n)
+	//}
+	//log.Printf("\n")
 	return int32(bcdToBYTE(readBuffer[1])) +
 		int32(bcdToBYTE(readBuffer[2]))*100 +
 		int32(bcdToBYTE(readBuffer[3]))*10000
@@ -78,10 +84,6 @@ func setCount(d i2c.Dev, count int32) {
 		byteToBCD(uint8(count % 100)),
 		byteToBCD(uint8((count / 100) % 100)),
 		byteToBCD(uint8((count / 10000) % 100))}
-	for _, n := range writeBuffer {
-		log.Printf("% 08b", n)
-	}
-	log.Printf("\n")
 	d.Write(writeBuffer)
 	start(d)
 }
