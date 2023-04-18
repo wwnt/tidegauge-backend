@@ -38,7 +38,7 @@ func PortTerminalWebsocket(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	value, ok := connections.Load(stationId)
+	value, ok := recvConnections.Load(stationId)
 	if !ok {
 		_ = wsw.WriteControl(websocket.CloseMessage, wsStationDisconnected, time.Now().Add(writeWait))
 		return

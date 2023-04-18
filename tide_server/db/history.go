@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/google/uuid"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5/pgconn"
 	"tide/common"
 	"tide/pkg/custype"
 	"time"
@@ -19,6 +19,7 @@ func GetItemsLatest(stationId uuid.UUID, itemsLatest common.StringMsecMap) error
 		err := TideDB.QueryRow("select max(timestamp) from "+itemName+" where station_id=$1", stationId).Scan(&t)
 		if err != nil {
 			if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "42P01" {
+				// relation Table does not exist
 				continue
 			}
 			return err

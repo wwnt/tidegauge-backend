@@ -14,7 +14,6 @@ import (
 type Tcp struct {
 	addr        string
 	conn        *net.TCPConn
-	rawConn     syscall.RawConn
 	readTimeout time.Duration
 	readBuf     []byte
 }
@@ -26,19 +25,21 @@ func NewTcp(addr string, readTimeout uint32) (connWrap.ConnCommon, error) {
 }
 
 func (c *Tcp) open() error {
-	if c.conn != nil {
+	if c.conn == nil {
+		c.conn = new(net.TCPConn)
+	} else {
 		_ = c.conn.Close()
 	}
 	newConn, err := net.Dial("tcp", c.addr)
 	if err == nil {
 		log.Println("connected to", newConn.RemoteAddr())
 		c.conn = newConn.(*net.TCPConn)
-		c.rawConn, err = c.conn.SyscallConn()
+		rawConn, err := c.conn.SyscallConn()
 		if err != nil {
 			return err
 		}
 		var sysErr error
-		err = c.rawConn.Control(func(fd uintptr) {
+		err = rawConn.Control(func(fd uintptr) {
 			sysErr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 1)
 		})
 		if sysErr != nil {
@@ -63,7 +64,9 @@ func (c *Tcp) Read(b []byte) (n int, err error) {
 }
 
 func (c *Tcp) Write(b []byte) (n int, err error) {
-	_ = c.ResetInputBuffer()
+	if err = c.ResetInputBuffer(); err != nil {
+		return 0, err
+	}
 	n, err = c.conn.Write(b)
 	if err != nil {
 		if err2 := c.open(); err2 != nil {
@@ -74,8 +77,12 @@ func (c *Tcp) Write(b []byte) (n int, err error) {
 }
 
 func (c *Tcp) ReadyToRead() (n uint32, err error) {
+	rawConn, err := c.conn.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
 	var errno syscall.Errno
-	err = c.rawConn.Control(func(fd uintptr) {
+	err = rawConn.Control(func(fd uintptr) {
 		_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, fd, syscall.TIOCINQ, uintptr(unsafe.Pointer(&n)))
 	})
 	if errno != 0 {
@@ -85,7 +92,11 @@ func (c *Tcp) ReadyToRead() (n uint32, err error) {
 }
 
 func (c *Tcp) ResetInputBuffer() (err error) {
-	err = c.rawConn.Control(func(fd uintptr) {
+	rawConn, err := c.conn.SyscallConn()
+	if err != nil {
+		return err
+	}
+	err = rawConn.Control(func(fd uintptr) {
 		_, _ = syscall.Read(int(fd), c.readBuf)
 	})
 	return

@@ -94,7 +94,7 @@ func CameraLiveSnapshot(c *gin.Context) {
 		return
 	}
 
-	value, ok := connections.Load(stationId)
+	value, ok := recvConnections.Load(stationId)
 	if !ok {
 		return
 	}
@@ -182,12 +182,12 @@ func CameraLatestSnapShot(c *gin.Context) {
 		}
 		// get update from upstream
 		for _, upstream := range ups {
-			value, ok := connections.Load(upstream.Id)
+			value, ok := recvConnections.Load(upstream.Id)
 			if !ok {
 				continue
 			}
 			up := value.(*upstreamStorage)
-			resp, err := up.httpClient.Get(up.config.LatestSnapshot + "?station_id=" + stationId.String() + "&name=" + params.CameraName + "&after=" + latestCacheTs.String())
+			resp, err := up.httpClient.Get(up.config.Url + cameraLatestSnapshotPath + "?station_id=" + stationId.String() + "&name=" + params.CameraName + "&after=" + latestCacheTs.String())
 			if err != nil {
 				logger.Error(err.Error())
 				continue

@@ -72,15 +72,15 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 	}
 	logger.Debug("station conn", zap.String("identifier", info.Identifier), zap.String("remote", conn.RemoteAddr().String()))
 
-	if _, loaded := connections.LoadOrStore(stationId, session); loaded {
+	if _, loaded := recvConnections.LoadOrStore(stationId, session); loaded {
 		logger.Warn("repeated identifier detected", zap.String("identifier", info.Identifier), zap.String("remote", conn.RemoteAddr().String()))
 		return
 	}
 
 	defer func() {
 		UpdateStationStatus(statusPubSub, stationId, info.Identifier, common.Disconnected)
-		// Finish all the work, then delete from connections
-		connections.Delete(stationId)
+		// Finish all the work, then delete from recvConnections
+		recvConnections.Delete(stationId)
 	}()
 	if !UpdateStationStatus(statusPubSub, stationId, info.Identifier, common.Normal) {
 		return
@@ -129,14 +129,11 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 				return
 			}
 			stationItem := common.StationItemStruct{StationId: stationId, ItemName: body.ItemName}
-			err = dataPubSub.Publish(forwardDataStruct{
+			dataPubSubDelay.DelayPublish(forwardDataStruct{
 				Type:              kMsgData,
 				StationItemStruct: stationItem,
 				DataTimeStruct:    body.DataTimeStruct,
 			}, stationItem)
-			if err != nil {
-				logger.DPanic("publish", zap.Error(err))
-			}
 		case common.MsgGpioData:
 			var body common.ItemNameDataTimeStruct
 			if err = json.Unmarshal(msg.Body, &body); err != nil {
@@ -152,21 +149,18 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 				return
 			}
 			stationItem := common.StationItemStruct{StationId: stationId, ItemName: body.ItemName}
-			err = dataPubSub.Publish(forwardDataStruct{
+			dataPubSubDelay.DelayPublish(forwardDataStruct{
 				Type:              kMsgDataGpio,
 				StationItemStruct: stationItem,
 				DataTimeStruct:    body.DataTimeStruct,
 			}, stationItem)
-			if err != nil {
-				logger.DPanic("publish", zap.Error(err))
-			}
 		case common.MsgRpiStatus:
 			var body common.RpiStatusTimeStruct
 			if err = json.Unmarshal(msg.Body, &body); err != nil {
 				logger.Error(err.Error())
 				return
 			}
-			if err = db.SaveRpiStatus(body.CpuTemp, body.GpuTemp, body.Millisecond.ToTime()); err != nil {
+			if err = db.SaveRpiStatus(stationId, body.CpuTemp, body.Millisecond.ToTime()); err != nil {
 				logger.Error(err.Error())
 			}
 		case common.MsgItemStatus:

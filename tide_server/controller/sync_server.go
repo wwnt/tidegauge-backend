@@ -5,7 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 	"io"
 	"net"
@@ -18,7 +18,7 @@ import (
 
 func Sync(c *gin.Context) {
 	// make client's Response.Body implement io.ReadWriteCloser
-	// net/http/response.go:363
+	// net/http/response.go: func isProtocolSwitchResponse()
 	c.Writer.Header().Set("Upgrade", "websocket")
 	c.Writer.Header().Set("Connection", "Upgrade")
 	c.Writer.WriteHeader(http.StatusSwitchingProtocols)
@@ -238,6 +238,7 @@ func fillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 				ds, err := db.GetDataHistory(stationId, itemName, msec, 0)
 				if err != nil {
 					if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "42P01" {
+						// relation Table does not exist
 						continue
 					}
 					logger.Error(err.Error())

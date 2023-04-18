@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/smtp"
 	"os"
+	"time"
 )
 
 var Config struct {
@@ -16,6 +17,7 @@ var Config struct {
 			Storage             string `json:"storage"`
 			LatestSnapshotCount int    `json:"latest_snapshot_count"`
 		} `json:"camera"`
+		DataDelay time.Duration `json:"data_delay"`
 	} `json:"tide"`
 	Smtp     smtpConfigStruct `json:"smtp"`
 	Keycloak struct {

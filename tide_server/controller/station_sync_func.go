@@ -11,7 +11,6 @@ import (
 func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk bool) {
 	//stream, _ := net.Pipe()
 	var err error
-	logger := zap.L()
 
 	// update items and devices
 	var (
@@ -37,7 +36,7 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 			oldItems[item.Name] = item
 		}
 	}
-
+	// create device first because item need device
 	for deviceName, items := range info.Devices {
 		if _, ok := oldDevices[deviceName]; !ok {
 			// only create device
@@ -75,9 +74,14 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 			Publish(configPubSub, SendMsgStruct{Type: kMsgDelItem, Body: db.Item{StationId: stationId, Name: itemName}}, nil)
 		}
 	}
+	var numNewItems int
 	for itemName, newItemInfo := range newItems {
 		// item info changed
-		if oldItemInfo, ok := oldItems[itemName]; !ok || oldItemInfo.Name != newItemInfo.DeviceName || oldItemInfo.Type != newItemInfo.Type {
+		oldItemInfo, ok := oldItems[itemName]
+		if !ok {
+			numNewItems++
+		}
+		if !ok || oldItemInfo.Name != newItemInfo.DeviceName || oldItemInfo.Type != newItemInfo.Type {
 			item := db.Item{StationId: stationId, Name: itemName, Type: newItemInfo.Type, DeviceName: newItemInfo.DeviceName}
 			if err = db.EditItem(item); err != nil {
 				logger.Error(err.Error())
@@ -85,6 +89,9 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 			}
 			Publish(configPubSub, SendMsgStruct{Type: kMsgSyncItem, Body: item}, nil)
 		}
+	}
+	if numNewItems > 0 {
+		handleAddItems()
 	}
 
 	if camerasJson, err := json.Marshal(info.Cameras); err != nil {
@@ -114,7 +121,7 @@ func WriteItemsLatest(encoder *json.Encoder, stationId uuid.UUID, devices map[st
 		logger.Error(err.Error())
 		return
 	}
-	logger.Debug("items latest")
+	logger.Debug("get the last record time of each item")
 	if err = encoder.Encode(itemsLatest); err != nil {
 		logger.Error(err.Error())
 		return

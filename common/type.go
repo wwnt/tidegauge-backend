@@ -30,7 +30,6 @@ type ReceiveMsgStruct struct {
 
 type RpiStatusStruct struct {
 	CpuTemp float64 `json:"cpu_temp"`
-	GpuTemp float64 `json:"gpu_temp"`
 }
 
 type RpiStatusTimeStruct struct {

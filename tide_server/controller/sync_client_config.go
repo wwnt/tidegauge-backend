@@ -314,6 +314,7 @@ func handleSyncConfigMsg(msg RcvMsgStruct, upstream *upstreamStorage) (retOk boo
 	// establish connection
 	// change sync user permission
 	// upstream relay
+	// add item
 	case kMsgUpdateAvailable:
 		var body common.UUIDStringsMap
 		if err = json.Unmarshal(msg.Body, &body); err != nil {
@@ -326,7 +327,7 @@ func handleSyncConfigMsg(msg RcvMsgStruct, upstream *upstreamStorage) (retOk boo
 			return
 		}
 		if n > 0 {
-			changeUserAvailableScope(body)
+			handleAvailableChange(body)
 			return true
 		}
 	}

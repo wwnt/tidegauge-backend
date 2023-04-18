@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/Nerzal/gocloak/v11"
-	"github.com/jackc/pgconn"
+	"github.com/Nerzal/gocloak/v13"
+	"github.com/jackc/pgx/v5/pgconn"
 	"net/http"
 	"net/url"
 	"strings"
@@ -16,7 +16,7 @@ import (
 type Keycloak struct {
 	token                          *gocloak.JWT
 	db                             *sql.DB
-	client                         gocloak.GoCloak
+	client                         *gocloak.GoCloak
 	basePath                       string
 	masterUsername, masterPassword string
 	realm, clientId, clientSecret  string

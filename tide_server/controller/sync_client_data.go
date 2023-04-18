@@ -47,6 +47,7 @@ func syncDataClient(conn net.Conn) {
 			if msg.Type == kMsgMissData {
 				Publish(missDataPubSub, msg, msg.StationItemStruct)
 			} else {
+				// msg.Type == kMsgData
 				Publish(dataPubSub, msg, msg.StationItemStruct)
 			}
 		}

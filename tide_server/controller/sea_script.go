@@ -16,7 +16,7 @@ var lons = map[string]float64{"abas": 144.29, "abed": -2.08, "abur": 131.41, "ac
 func seaHeight() {
 	resp, err := http.Get("https://www.ioc-sealevelmonitoring.org/list.php?operator=&showall=all&output=general")
 	if err != nil {
-		logger.Warn(err.Error())
+		logger.Info(err.Error())
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -27,7 +27,7 @@ func seaHeight() {
 	}
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Info(err.Error())
 		return
 	}
 
@@ -87,7 +87,7 @@ type glossStations struct {
 func stationInfoGlossAll() {
 	resp, err := http.Get("https://www.psmsl.org/products/gloss/data/glossCoreNetwork.xml")
 	if err != nil {
-		logger.Warn(err.Error())
+		logger.Info(err.Error())
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -98,7 +98,7 @@ func stationInfoGlossAll() {
 	var tmp glossCoreNetwork
 	err = xml.NewDecoder(resp.Body).Decode(&tmp)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Info(err.Error())
 		return
 	}
 	tmp.GlossStations.Stations = append(tmp.GlossStations.Stations, db.GlossStation{

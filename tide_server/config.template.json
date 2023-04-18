@@ -5,7 +5,8 @@
         "camera": {
             "storage": "",
             "latest_snapshot_count": 9
-        }
+        },
+        "data_delay": 60
     },
     "smtp": {
         "host": "",

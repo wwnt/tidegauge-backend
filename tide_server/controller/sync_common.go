@@ -135,42 +135,89 @@ func closeAllConn(typ int) {
 	}
 }
 
-func changeUserPermissionScope(username string, permissions map[uuid.UUID][]string) {
+func handlePermissionChange(username string, permissions map[uuid.UUID][]string) {
 	usersConns.Lock()
 	defer usersConns.Unlock()
-	conns := usersConns.m[username]
-	if len(conns) > 0 {
-		var permTopic pubsub.TopicMap
-		if permissions != nil {
-			permTopic = uuidStringsMapToTopic(permissions)
+
+	var permTopic pubsub.TopicMap
+	if permissions != nil {
+		permTopic = uuidStringsMapToTopic(permissions)
+	}
+	var syncConfigConns []io.WriteCloser
+	for conn, t := range usersConns.m[username] {
+		if connTypeWebBrowser&t != 0 {
+			dataPubSub.LimitTopicScope(conn, permTopic)
 		}
-		var tmpSyncConns []io.WriteCloser
-		for conn, t := range conns {
-			if connTypeWebBrowser&t != 0 {
-				dataPubSub.LimitTopicScope(conn, permTopic)
-			}
-			if connTypeSyncData&t != 0 {
+		if connTypeSyncData&t != 0 {
+			_ = conn.Close()
+		}
+		if connTypeSyncConfig&t != 0 {
+			syncConfigConns = append(syncConfigConns, conn)
+		}
+	}
+	if len(syncConfigConns) > 0 {
+		localAvail, err := db.GetAvailableItems()
+		if err != nil {
+			logger.Error(err.Error())
+			for _, conn := range syncConfigConns {
 				_ = conn.Close()
 			}
-			if connTypeSyncConfig&t != 0 {
-				tmpSyncConns = append(tmpSyncConns, conn)
+		}
+		var downstreamAvail = make(common.UUIDStringsMap)
+		for _, stationItem := range localAvail {
+			if _, ok := permTopic[stationItem]; ok || permTopic == nil {
+				downstreamAvail[stationItem.StationId] = append(downstreamAvail[stationItem.StationId], stationItem.ItemName)
 			}
 		}
-		if len(tmpSyncConns) > 0 {
-			localAvail, err := db.GetAvailableItems()
+		for _, conn := range syncConfigConns {
+			err = json.NewEncoder(conn).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
+			if err != nil {
+				_ = conn.Close()
+			}
+		}
+	}
+}
+
+func handleAvailableChange(localAvail map[uuid.UUID][]string) {
+	usersConns.Lock()
+	defer usersConns.Unlock()
+	for username, conns := range usersConns.m {
+		var syncConfigConns []io.WriteCloser
+		for conn, t := range conns {
+			if connTypeSyncConfig&t != 0 {
+				syncConfigConns = append(syncConfigConns, conn)
+			}
+		}
+		if len(syncConfigConns) > 0 {
+			user, err := userManager.GetUser(username)
 			if err != nil {
 				logger.Error(err.Error())
-				for _, conn := range tmpSyncConns {
+				for _, conn := range syncConfigConns {
 					_ = conn.Close()
 				}
+				continue
+			}
+			var permTopic pubsub.TopicMap
+			if user.Role == auth.NormalUser {
+				permissions, err := authorization.GetPermissions(username)
+				if err != nil {
+					logger.Error(err.Error())
+					for _, conn := range syncConfigConns {
+						_ = conn.Close()
+					}
+					continue
+				}
+				permTopic = uuidStringsMapToTopic(permissions)
 			}
 			var downstreamAvail = make(common.UUIDStringsMap)
-			for _, stationItem := range localAvail {
-				if _, ok := permTopic[stationItem]; ok || permTopic == nil {
-					downstreamAvail[stationItem.StationId] = append(downstreamAvail[stationItem.StationId], stationItem.ItemName)
+			for stationId, items := range localAvail {
+				for _, itemName := range items {
+					if _, ok := permTopic[common.StationItemStruct{StationId: stationId, ItemName: itemName}]; ok || permTopic == nil {
+						downstreamAvail[stationId] = append(downstreamAvail[stationId], itemName)
+					}
 				}
 			}
-			for _, conn := range tmpSyncConns {
+			for _, conn := range syncConfigConns {
 				err = json.NewEncoder(conn).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
 				if err != nil {
 					_ = conn.Close()
@@ -180,19 +227,33 @@ func changeUserPermissionScope(username string, permissions map[uuid.UUID][]stri
 	}
 }
 
-func changeUserAvailableScope(localAvail map[uuid.UUID][]string) {
+func handleAddItems() {
+	localAvail, err := db.GetAvailableItems()
+	if err != nil {
+		logger.Error(err.Error())
+		return
+	}
 	usersConns.Lock()
 	defer usersConns.Unlock()
 	for username, conns := range usersConns.m {
-		if len(conns) > 0 {
-			var syncConfigConns []io.WriteCloser
-			for conn, t := range conns {
-				if connTypeSyncConfig&t != 0 {
-					syncConfigConns = append(syncConfigConns, conn)
-				}
+		var syncConfigConns []io.WriteCloser
+		for conn, t := range conns {
+			if connTypeSyncConfig&t != 0 {
+				syncConfigConns = append(syncConfigConns, conn)
 			}
-			if len(syncConfigConns) > 0 {
-				user, err := userManager.GetUser(username)
+		}
+		if len(syncConfigConns) > 0 {
+			user, err := userManager.GetUser(username)
+			if err != nil {
+				logger.Error(err.Error())
+				for _, conn := range syncConfigConns {
+					_ = conn.Close()
+				}
+				continue
+			}
+			var permTopic pubsub.TopicMap
+			if user.Role == auth.NormalUser {
+				permissions, err := authorization.GetPermissions(username)
 				if err != nil {
 					logger.Error(err.Error())
 					for _, conn := range syncConfigConns {
@@ -200,31 +261,18 @@ func changeUserAvailableScope(localAvail map[uuid.UUID][]string) {
 					}
 					continue
 				}
-				var permTopic pubsub.TopicMap
-				if user.Role == auth.NormalUser {
-					permissions, err := authorization.GetPermissions(username)
-					if err != nil {
-						logger.Error(err.Error())
-						for _, conn := range syncConfigConns {
-							_ = conn.Close()
-						}
-						continue
-					}
-					permTopic = uuidStringsMapToTopic(permissions)
+				permTopic = uuidStringsMapToTopic(permissions)
+			}
+			var downstreamAvail = make(common.UUIDStringsMap)
+			for _, stationItem := range localAvail {
+				if _, ok := permTopic[stationItem]; ok || permTopic == nil {
+					downstreamAvail[stationItem.StationId] = append(downstreamAvail[stationItem.StationId], stationItem.ItemName)
 				}
-				var downstreamAvail = make(common.UUIDStringsMap)
-				for stationId, items := range localAvail {
-					for _, itemName := range items {
-						if _, ok := permTopic[common.StationItemStruct{StationId: stationId, ItemName: itemName}]; ok || permTopic == nil {
-							downstreamAvail[stationId] = append(downstreamAvail[stationId], itemName)
-						}
-					}
-				}
-				for _, conn := range syncConfigConns {
-					err = json.NewEncoder(conn).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
-					if err != nil {
-						_ = conn.Close()
-					}
+			}
+			for _, conn := range syncConfigConns {
+				err = json.NewEncoder(conn).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
+				if err != nil {
+					_ = conn.Close()
 				}
 			}
 		}

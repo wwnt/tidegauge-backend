@@ -58,7 +58,9 @@ func (c *Uart) Read(b []byte) (n int, err error) {
 }
 
 func (c *Uart) Write(b []byte) (n int, err error) {
-	_ = c.ResetInputBuffer()
+	if err = c.ResetInputBuffer(); err != nil {
+		return 0, err
+	}
 	n, err = c.conn.Write(b)
 	if err != nil {
 		if err2 := c.open(); err2 != nil {
