@@ -21,7 +21,7 @@ var (
 	logger = zap.L()
 
 	dataPubSub      = pubsub.NewPubSub()
-	dataPubSubDelay = pubsub.NewDelayPublish(dataPubSub, global.Config.Tide.DataDelay*time.Second, logger)
+	dataPubSubDelay = pubsub.NewDelayPublish(dataPubSub, global.Config.Tide.DataDelaySec*time.Second, logger)
 	missDataPubSub  = pubsub.NewPubSub()
 	statusPubSub    = pubsub.NewPubSub()
 	configPubSub    = pubsub.NewPubSub()
