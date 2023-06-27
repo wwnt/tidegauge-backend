@@ -100,9 +100,10 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 			return
 		}
 	}
+	subscriber := pubsub.NewSubscriber(session.CloseChan(), stream1)
 
-	dataSub.SubscribeTopic(stream1, nil)
-	defer dataSub.Evict(stream1)
+	dataSub.SubscribeTopic(subscriber, nil)
+	defer dataSub.Evict(subscriber)
 
 	dataReceiveMu.Unlock()
 

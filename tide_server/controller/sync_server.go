@@ -87,16 +87,18 @@ func handleSyncServerConn(conn io.ReadWriteCloser, username string, permissions 
 			}
 		}
 	}
+	subscriber := pubsub.NewSubscriber(session.CloseChan(), stream1)
+
 	// increment and full are separated to avoid receiving increment first
 	// make sure subscribe first
 	{
-		addUserConn(username, stream1, connTypeSyncConfig)
-		defer delUserConn(username, stream1)
+		addUserConn(username, subscriber, connTypeSyncConfig)
+		defer delUserConn(username, subscriber)
 
-		configPubSub.SubscribeTopic(stream1, nil)
-		defer configPubSub.Evict(stream1)
-		statusPubSub.SubscribeTopic(stream1, nil)
-		defer statusPubSub.Evict(stream1)
+		configPubSub.SubscribeTopic(subscriber, nil)
+		defer configPubSub.Evict(subscriber)
+		statusPubSub.SubscribeTopic(subscriber, nil)
+		defer statusPubSub.Evict(subscriber)
 	}
 
 	stream2, err := session.Accept()
@@ -178,14 +180,15 @@ func syncDataServer(username string, session *yamux.Session, permTopic pubsub.To
 	}
 	defer func() { _ = stream3.Close() }()
 
+	subscriber := pubsub.NewSubscriber(session.CloseChan(), stream3)
 	{
-		addUserConn(username, stream3, connTypeSyncData)
-		defer delUserConn(username, stream3)
+		addUserConn(username, subscriber, connTypeSyncData)
+		defer delUserConn(username, subscriber)
 
-		dataPubSub.SubscribeTopic(stream3, permTopic)
-		defer dataPubSub.Evict(stream3)
-		missDataPubSub.SubscribeTopic(stream3, permTopic)
-		defer missDataPubSub.Evict(stream3)
+		dataPubSub.SubscribeTopic(subscriber, permTopic)
+		defer dataPubSub.Evict(subscriber)
+		missDataPubSub.SubscribeTopic(subscriber, permTopic)
+		defer missDataPubSub.Evict(subscriber)
 	}
 
 	stream4, err := session.Accept()

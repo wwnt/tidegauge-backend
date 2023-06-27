@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
-	"io"
 	"sync"
 	"tide/common"
 	"tide/pkg/custype"
@@ -85,22 +84,22 @@ const (
 // connections with downstream or websocket. Used to send data
 var usersConns = struct {
 	sync.Mutex
-	m map[string]map[pubsub.PubConn]int
+	m map[string]map[pubsub.Subscriber]int
 }{
-	m: make(map[string]map[pubsub.PubConn]int),
+	m: make(map[string]map[pubsub.Subscriber]int),
 }
 
-func addUserConn(username string, conn pubsub.PubConn, typ int) {
+func addUserConn(username string, conn pubsub.Subscriber, typ int) {
 	usersConns.Lock()
 	defer usersConns.Unlock()
 	if conns, ok := usersConns.m[username]; ok {
 		conns[conn] = typ
 	} else {
-		usersConns.m[username] = map[pubsub.PubConn]int{conn: typ}
+		usersConns.m[username] = map[pubsub.Subscriber]int{conn: typ}
 	}
 }
 
-func delUserConn(username string, conn pubsub.PubConn) {
+func delUserConn(username string, conn pubsub.Subscriber) {
 	usersConns.Lock()
 	defer usersConns.Unlock()
 	delete(usersConns.m[username], conn)
@@ -112,11 +111,11 @@ func delUserConn(username string, conn pubsub.PubConn) {
 func closeConnByUser(username string, typ int) {
 	usersConns.Lock()
 	defer usersConns.Unlock()
-	conns, ok := usersConns.m[username]
+	subscribers, ok := usersConns.m[username]
 	if ok {
-		for conn, t := range conns {
+		for subscriber, t := range subscribers {
 			if typ&t != 0 {
-				_ = conn.Close()
+				subscriber <- nil
 			}
 		}
 	}
@@ -125,11 +124,11 @@ func closeConnByUser(username string, typ int) {
 func closeAllConn(typ int) {
 	usersConns.Lock()
 	defer usersConns.Unlock()
-	for username, conns := range usersConns.m {
+	for username, subscribers := range usersConns.m {
 		delete(usersConns.m, username)
-		for conn, t := range conns {
+		for subscriber, t := range subscribers {
 			if typ&t != 0 {
-				_ = conn.Close()
+				subscriber <- nil
 			}
 		}
 	}
@@ -143,25 +142,26 @@ func handlePermissionChange(username string, permissions map[uuid.UUID][]string)
 	if permissions != nil {
 		permTopic = uuidStringsMapToTopic(permissions)
 	}
-	var syncConfigConns []io.WriteCloser
-	for conn, t := range usersConns.m[username] {
+	var syncConfigConns []pubsub.Subscriber
+	for subscriber, t := range usersConns.m[username] {
 		if connTypeWebBrowser&t != 0 {
-			dataPubSub.LimitTopicScope(conn, permTopic)
+			dataPubSub.LimitTopicScope(subscriber, permTopic)
 		}
 		if connTypeSyncData&t != 0 {
-			_ = conn.Close()
+			subscriber <- nil
 		}
 		if connTypeSyncConfig&t != 0 {
-			syncConfigConns = append(syncConfigConns, conn)
+			syncConfigConns = append(syncConfigConns, subscriber)
 		}
 	}
 	if len(syncConfigConns) > 0 {
 		localAvail, err := db.GetAvailableItems()
 		if err != nil {
 			logger.Error(err.Error())
-			for _, conn := range syncConfigConns {
-				_ = conn.Close()
+			for _, subscriber := range syncConfigConns {
+				subscriber <- nil
 			}
+			return
 		}
 		var downstreamAvail = make(common.UUIDStringsMap)
 		for _, stationItem := range localAvail {
@@ -169,10 +169,15 @@ func handlePermissionChange(username string, permissions map[uuid.UUID][]string)
 				downstreamAvail[stationItem.StationId] = append(downstreamAvail[stationItem.StationId], stationItem.ItemName)
 			}
 		}
-		for _, conn := range syncConfigConns {
-			err = json.NewEncoder(conn).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
-			if err != nil {
-				_ = conn.Close()
+		j, err := json.Marshal(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
+		if err != nil {
+			return
+		}
+		for _, subscriber := range syncConfigConns {
+			select {
+			case subscriber <- j:
+			default:
+				subscriber <- nil
 			}
 		}
 	}
@@ -181,19 +186,19 @@ func handlePermissionChange(username string, permissions map[uuid.UUID][]string)
 func handleAvailableChange(localAvail map[uuid.UUID][]string) {
 	usersConns.Lock()
 	defer usersConns.Unlock()
-	for username, conns := range usersConns.m {
-		var syncConfigConns []io.WriteCloser
-		for conn, t := range conns {
+	for username, subscribers := range usersConns.m {
+		var syncConfigSubscribers []pubsub.Subscriber
+		for subscriber, t := range subscribers {
 			if connTypeSyncConfig&t != 0 {
-				syncConfigConns = append(syncConfigConns, conn)
+				syncConfigSubscribers = append(syncConfigSubscribers, subscriber)
 			}
 		}
-		if len(syncConfigConns) > 0 {
+		if len(syncConfigSubscribers) > 0 {
 			user, err := userManager.GetUser(username)
 			if err != nil {
 				logger.Error(err.Error())
-				for _, conn := range syncConfigConns {
-					_ = conn.Close()
+				for _, subscriber := range syncConfigSubscribers {
+					subscriber <- nil
 				}
 				continue
 			}
@@ -202,8 +207,8 @@ func handleAvailableChange(localAvail map[uuid.UUID][]string) {
 				permissions, err := authorization.GetPermissions(username)
 				if err != nil {
 					logger.Error(err.Error())
-					for _, conn := range syncConfigConns {
-						_ = conn.Close()
+					for _, subscriber := range syncConfigSubscribers {
+						subscriber <- nil
 					}
 					continue
 				}
@@ -217,10 +222,15 @@ func handleAvailableChange(localAvail map[uuid.UUID][]string) {
 					}
 				}
 			}
-			for _, conn := range syncConfigConns {
-				err = json.NewEncoder(conn).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
-				if err != nil {
-					_ = conn.Close()
+			j, err := json.Marshal(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
+			if err != nil {
+				return
+			}
+			for _, subscriber := range syncConfigSubscribers {
+				select {
+				case subscriber <- j:
+				default:
+					subscriber <- nil
 				}
 			}
 		}
@@ -235,19 +245,19 @@ func handleAddItems() {
 	}
 	usersConns.Lock()
 	defer usersConns.Unlock()
-	for username, conns := range usersConns.m {
-		var syncConfigConns []io.WriteCloser
-		for conn, t := range conns {
+	for username, subscribers := range usersConns.m {
+		var syncConfigSubscribers []pubsub.Subscriber
+		for subscriber, t := range subscribers {
 			if connTypeSyncConfig&t != 0 {
-				syncConfigConns = append(syncConfigConns, conn)
+				syncConfigSubscribers = append(syncConfigSubscribers, subscriber)
 			}
 		}
-		if len(syncConfigConns) > 0 {
+		if len(syncConfigSubscribers) > 0 {
 			user, err := userManager.GetUser(username)
 			if err != nil {
 				logger.Error(err.Error())
-				for _, conn := range syncConfigConns {
-					_ = conn.Close()
+				for _, subscriber := range syncConfigSubscribers {
+					subscriber <- nil
 				}
 				continue
 			}
@@ -256,8 +266,8 @@ func handleAddItems() {
 				permissions, err := authorization.GetPermissions(username)
 				if err != nil {
 					logger.Error(err.Error())
-					for _, conn := range syncConfigConns {
-						_ = conn.Close()
+					for _, subscriber := range syncConfigSubscribers {
+						subscriber <- nil
 					}
 					continue
 				}
@@ -269,10 +279,15 @@ func handleAddItems() {
 					downstreamAvail[stationItem.StationId] = append(downstreamAvail[stationItem.StationId], stationItem.ItemName)
 				}
 			}
-			for _, conn := range syncConfigConns {
-				err = json.NewEncoder(conn).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
-				if err != nil {
-					_ = conn.Close()
+			j, err := json.Marshal(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail})
+			if err != nil {
+				return
+			}
+			for _, subscriber := range syncConfigSubscribers {
+				select {
+				case subscriber <- j:
+				default:
+					subscriber <- nil
 				}
 			}
 		}
