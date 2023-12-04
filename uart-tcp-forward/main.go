@@ -116,13 +116,6 @@ func openSerial(portName *string, baudRate *int, dataBits *int, parity *string) 
 		Parity:   selectParity(*parity),
 		StopBits: serial.OneStopBit,
 	})
-	if err == nil {
-		// reset arduino
-		_ = port.SetDTR(true)
-		time.Sleep(10 * time.Millisecond)
-		_ = port.SetDTR(false)
-		time.Sleep(time.Second)
-	}
 	return port, err
 }
 

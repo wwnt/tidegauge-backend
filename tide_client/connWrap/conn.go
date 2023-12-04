@@ -83,7 +83,7 @@ func (c *ConnUtil) CustomCommand(input []byte) (received []byte, err error) {
 }
 
 func (c *ConnUtil) UnlockCheckNotTimeout(err error) {
-	if err != nil && err != ErrTimeout {
+	if err != nil && !errors.Is(err, ErrTimeout) {
 		time.Sleep(time.Second) // wait for end
 	}
 	c.Unlock()

@@ -1,18 +1,28 @@
-- [1. What do you need](#1-what-do-you-need)
-- [2. Prerequisite](#2-prerequisite)
-    - [2.1. Ftp Server](#21-ftp-server)
-    - [2.2. Syncthing](#22-syncthing)
-- [3. Flash Arduino](#3-flash-arduino)
-- [4. Init sqlite database tables](#4-init-sqlite-database-tables)
-- [5. Build client on wsl2 or Linux](#5-build-client-on-wsl2-or-linux)
-- [6. Install as service](#6-install-as-service)
-- [7. Fix raspberry pi usb device name](#7-fix-raspberry-pi-usb-device-name)
-    - [7.1. Checkout the usb serial device name](#71-checkout-the-usb-serial-device-name)
-- [8. Sensor Wiring](#8-sensor-wiring)
-    - [8.1. RS485](#81-rs485)
-    - [8.2. SDI-12](#82-sdi-12)
-    - [8.3. Analog (connected to arduino)](#83-analog-connected-to-arduino)
-    - [8.4. GPIO (connected to raspberry pi)](#84-gpio-connected-to-raspberry-pi)
+<!-- TOC -->
+* [1. What do you need](#1-what-do-you-need)
+* [2. Prerequisite](#2-prerequisite)
+  * [2.1. Ftp Server](#21-ftp-server)
+  * [2.2. Syncthing](#22-syncthing)
+* [3. Flash Arduino](#3-flash-arduino)
+* [4. Init sqlite database tables](#4-init-sqlite-database-tables)
+* [5. Build client on wsl2 or Linux](#5-build-client-on-wsl2-or-linux)
+* [6. Install as service](#6-install-as-service)
+* [7. Fix raspberry pi usb device name](#7-fix-raspberry-pi-usb-device-name)
+  * [7.1. Checkout the usb serial device name](#71-checkout-the-usb-serial-device-name)
+* [8. Sensor Init](#8-sensor-init)
+  * [8.1. RS485](#81-rs485)
+    * [8.1.1. HMP155](#811-hmp155)
+    * [8.1.2. PWD50](#812-pwd50)
+    * [8.1.3. WMT700](#813-wmt700)
+  * [8.2. SDI-12](#82-sdi-12)
+    * [8.2.1. PLS-C](#821-pls-c)
+    * [8.2.2. SE200](#822-se200)
+* [9. Sensor Wiring](#9-sensor-wiring)
+  * [9.1. RS485](#91-rs485)
+  * [9.2. SDI-12](#92-sdi-12)
+  * [9.3. Analog (connected to arduino)](#93-analog-connected-to-arduino)
+  * [9.4. GPIO (connected to raspberry pi)](#94-gpio-connected-to-raspberry-pi)
+<!-- TOC -->
 
 # 1. What do you need
 
@@ -56,16 +66,14 @@
 
 2. Server side:
 
-   The server side "Folder Path" must be the "tide.camera.storage" in config.json + station's uuid(get from the **stations** table in the database).
+   The server side "Folder Path" must be the "tide.camera.storage" in config.json + station's uuid(get from the *
+   *stations** table in the database).
 
    ![server side](../resources/server_side_syncthing.png)
 
 # 3. Flash Arduino
 
-1. Install Arduino Ide from Windows Store
-2. Open arduino/arduino.ino
-3. Connect arduino via usb cable
-4. Click upload
+Check [README.md](../arduino/README.md)
 
 # 4. Init sqlite database tables
 
@@ -138,7 +146,7 @@ pi@raspberrypi:~ $ ls -l /dev/tty.usb*
 lrwxrwxrwx 1 root root 7 Sep  1 11:21 /dev/tty.usb-1.3 -> ttyACM0
 ```
 
-The device name of raspberry pi 4b will be this:
+The device name of raspberry pi 4b will be like this:
 
 ```
  -------------------------------------------------
@@ -148,9 +156,60 @@ The device name of raspberry pi 4b will be this:
  -------------------------------------------------
 ```
 
-# 8. Sensor Wiring
+# 8. Sensor Init
 
 ## 8.1. RS485
+
+1. Setting sensor mode to "POLL"
+2. Setting sensor baud-rate to 9600, data-bits to 7, parity to "E", stop-bits to 1.
+3. Setting sensor address same with the address in config.
+
+### 8.1.1. HMP155
+
+```
+smode POLL
+seri 9600 e 7 1
+addr 5
+```
+
+### 8.1.2. PWD50
+
+```
+AMES 0 0
+BAUD 9600 E
+CONF // When asked about Unit id characters, set it to "1". For other items, just press Enter.
+```
+
+### 8.1.3. WMT700
+
+```
+$0OPEN<CR><LF> // Enter the configuration mode
+BAUD 9600,7,e,1
+S address,2<CR><LF> // Setting sensor address to "2"
+CLOSE<CR><LF> // Enter the measurement mode
+```
+
+## 8.2. SDI-12
+
+1. Setting sensor address same with the address in config.
+
+### 8.2.1. PLS-C
+
+```
+?! // Query the sensor address
+aA1! // Change the sensor address from "a" to "1".("a" is the address returned in the previous step)
+```
+
+### 8.2.2. SE200
+
+```
+?! // Query the sensor address
+aA2! // Change the sensor address from "a" to "2".("a" is the address returned in the previous step)
+```
+
+# 9. Sensor Wiring
+
+## 9.1. RS485
 
 | RS485  | A            | B     | VCC   | GND       |
 |--------|--------------|-------|-------|-----------|
@@ -158,19 +217,21 @@ The device name of raspberry pi 4b will be this:
 | PWD50  | brown        | white | red   | black     |
 | WMT700 | brown-yellow | black | white | gray-pink |
 
-## 8.2. SDI-12
+## 9.2. SDI-12
+
+Data line connect to the D7 pin of the arduino.
 
 | SDI-12 | VCC   | GND   | DATA   | SDI-12 GND |
 |--------|-------|-------|--------|------------|
 | SE200  | brown | white | yellow | green      |
 | PLS-C  | red   | blue  | gray   |            |
 
-## 8.3. Analog (connected to arduino)
+## 9.3. Analog (connected to arduino)
 
-DRD11A: yellow
+DRD11A: yellow wire connects to the A0 pin of the arduino.
 
-## 8.4. GPIO (connected to raspberry pi)
+## 9.4. GPIO (connected to raspberry pi)
 
-DRD11A: blue
+DRD11A: blue wire connects to the GPIO 17 pin of the raspberry pi.(Check Raspberry Pi PinOut at https://pinout.xyz/)
 
 ![img.png](../resources/DRD11A.png)
