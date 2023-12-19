@@ -8,7 +8,7 @@
 			"devices_uart_rs485.json"
 		],
 		"tcp": [
-			"devices_tcp_ttl_arduino.json",
+			"devices_tcp_arduino.json",
 			"devices_tcp_rs485_modbus.json"
 		],
 		"gpio": [

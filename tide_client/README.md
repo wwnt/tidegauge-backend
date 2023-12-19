@@ -28,12 +28,13 @@
 
 - Raspberry Pi 4 Model B
 - SanDisk 256GB MAX Endurance microSD Card
-- Arduino Uno (Optional, for SDI-12 and anolog read use)
-- Usb to rs485 (Optional)
+- Arduino Uno (for SDI-12 and anolog read use)
+- Usb to rs485
 - Rs485 Hub (Optional)
 
 # 2. Prerequisite
 
+- Fix all device IPs (Raspberry Pi and camera) on the router, or use hostname to connect to each other.
 - Ftp server
 - Syncthing (Used to synchronize camera photos)
 
@@ -66,9 +67,8 @@
 
 2. Server side:
 
-   The server side "Folder Path" must be the "tide.camera.storage" in config.json + station's uuid(get from the *
-   *stations** table in the database).
-
+   The server side "Folder Path" must be the "tide.camera.storage" in config.json + station's uuid(get from the
+   **stations** table in the database, or get it through the station details page URL. e.g.`https://oceans.navi-tech.net/#/stationDetail/1048a910-2a2b-11eb-9abd-d89ef3266df6`).
    ![server side](../resources/server_side_syncthing.png)
 
 # 3. Flash Arduino
@@ -158,6 +158,8 @@ The device name of raspberry pi 4b will be like this:
 
 # 8. Sensor Init
 
+Install [Serial Debug Assistant](https://www.microsoft.com/store/productId/9NBLGGH43HDM?ocid=pdpshare).
+
 ## 8.1. RS485
 
 1. Setting sensor mode to "POLL"
@@ -172,26 +174,42 @@ seri 9600 e 7 1
 addr 5
 ```
 
+![HMP155_change_mode.png](../resources/HMP155_change_mode.png)
+![HMP155_change_serial_conf.png](../resources/HMP155_change_serial_conf.png)
+![HMP155_change_addr.png](../resources/HMP155_change_addr.png)
+
 ### 8.1.2. PWD50
 
 ```
-AMES 0 0
-BAUD 9600 E
 CONF // When asked about Unit id characters, set it to "1". For other items, just press Enter.
 ```
+
+![pwd50_open.png](../resources/pwd50_open.png)
+![pwd50_conf.png](../resources/pwd50_conf_1.png)
+![pwd50_conf_1.png](../resources/pwd50_conf_1.png)
+![pwd50_conf_addr.png](../resources/pwd50_conf_addr.png)
+![pwd50_conf_end.png](../resources/pwd50_conf_end.png)
 
 ### 8.1.3. WMT700
 
 ```
 $0OPEN<CR><LF> // Enter the configuration mode
-BAUD 9600,7,e,1
 S address,2<CR><LF> // Setting sensor address to "2"
-CLOSE<CR><LF> // Enter the measurement mode
+BAUD 9600,7,e,1
 ```
+
+![open](../resources/wmt700_open.png)
+![change address](../resources/wnt700_change_addr.png)
+![change serial config](../resources/wmt700_change_serial_conf.png)
 
 ## 8.2. SDI-12
 
-1. Setting sensor address same with the address in config.
+This step will set sensor address same with the address in config.
+
+First you need to configure the Serial Debug Assistant to connect to the arduino.
+
+![select serial port](../resources/sdi12_select_serial_port.png)
+![open serial port.png](../resources/sdi12_open_serial_port.png)
 
 ### 8.2.1. PLS-C
 
@@ -200,12 +218,26 @@ CLOSE<CR><LF> // Enter the measurement mode
 aA1! // Change the sensor address from "a" to "1".("a" is the address returned in the previous step)
 ```
 
+1. Type "?!", then check "HEX send", then type "00 FF", then click send.
+   ![query address_1](../resources/sdi12_query_addr_1.png)
+   ![query address_2](../resources/sdi12_query_addr_2.png)
+2. Type "1A1!", then check "HEX send", then type "00 FF", then click send.
+   ![change address 1](../resources/pls-c_change_addr_1.png)
+   ![change address 2](../resources/pls-c_change_addr_2.png)
+
 ### 8.2.2. SE200
 
 ```
 ?! // Query the sensor address
 aA2! // Change the sensor address from "a" to "2".("a" is the address returned in the previous step)
 ```
+
+1. Type "?!", then check "HEX send", then type "00 FF", then click send.
+   ![query address_1](../resources/sdi12_query_addr_1.png)
+   ![query address_2](../resources/sdi12_query_addr_2.png)
+2. Type "2A2!", then check "HEX send", then type "00 FF", then click send.
+   ![change address 1](../resources/se200_change_addr_1.png)
+   ![change address 2](../resources/se200_change_addr_2.png)
 
 # 9. Sensor Wiring
 
