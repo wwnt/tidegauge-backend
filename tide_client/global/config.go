@@ -49,6 +49,8 @@ func Init(name string) {
 		CameraHoldTime = time.Now().Add(-24 * time.Hour * Config.Cameras.Ftp.HoldDays)
 	}
 	Log = simplelog.NewLogger(simplelog.GetLevel(Config.LogLevel), log.Default())
-	CronJob = cron.New(cron.WithParser(cron.NewParser(cron.SecondOptional|cron.Minute|cron.Hour|cron.Dom|cron.Month|cron.Dow|cron.Descriptor)), cron.WithChain(cron.Recover(cron.DefaultLogger)))
+	CronJob = cron.New(
+		cron.WithParser(cron.NewParser(cron.SecondOptional|cron.Minute|cron.Hour|cron.Dom|cron.Month|cron.Dow|cron.Descriptor)),
+		cron.WithChain(cron.Recover(cron.DefaultLogger)))
 	CronJob.Start()
 }

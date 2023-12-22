@@ -3,7 +3,10 @@ package uart
 import (
 	"errors"
 	"github.com/albenik/go-serial/v2"
+	"sync/atomic"
 	"tide/tide_client/connWrap"
+	"tide/tide_client/global"
+	"time"
 )
 
 type Mode struct {
@@ -17,18 +20,38 @@ type Uart struct {
 	portName    string
 	conn        *serial.Port
 	readTimeout uint32
+	inReconnect atomic.Bool
 }
 
 func NewUart(name string, readTimeout uint32, m Mode) (connWrap.ConnCommon, error) {
 	p := &Uart{portName: name, readTimeout: readTimeout, Mode: m}
-	err := p.open()
-	return p, err
+	p.reopenUntilSuccess()
+	return p, nil
 }
 
-func (c *Uart) open() error {
+func (c *Uart) reopenUntilSuccess() {
+	if !c.inReconnect.CompareAndSwap(false, true) {
+		// inReconnect == true
+		return
+	}
+	defer c.inReconnect.Store(false)
 	if c.conn != nil {
 		_ = c.conn.Close()
 	}
+	go func() {
+		var err error
+		for {
+			if err = c.open(); err == nil {
+				break
+			} else {
+				global.Log.Errorf("open %s: %s", c.portName, err)
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}()
+}
+
+func (c *Uart) open() error {
 	port, err := serial.Open(c.portName,
 		serial.WithBaudrate(c.BaudRate),
 		serial.WithParity(c.Parity),
@@ -45,39 +68,32 @@ func (c *Uart) open() error {
 }
 
 func (c *Uart) Read(b []byte) (n int, err error) {
+	defer c.handleErr(err)
 	n, err = c.conn.Read(b)
 	if n == 0 && err == nil {
 		return 0, connWrap.ErrTimeout
-	}
-	if err != nil {
-		if err2 := c.open(); err2 != nil {
-			err = errors.New(err.Error() + ". Reopen: " + err2.Error())
-		}
 	}
 	return n, err
 }
 
 func (c *Uart) Write(b []byte) (n int, err error) {
-	if err = c.ResetInputBuffer(); err != nil {
-		return 0, err
-	}
-	n, err = c.conn.Write(b)
-	if err != nil {
-		if err2 := c.open(); err2 != nil {
-			err = errors.New(err.Error() + ". Reopen: " + err2.Error())
-		}
-	}
-	return n, err
+	defer c.handleErr(err)
+	return c.conn.Write(b)
 }
 
-func (c *Uart) Close() error {
-	return c.conn.Close()
-}
-
-func (c *Uart) ReadyToRead() (uint32, error) {
+func (c *Uart) ReadyToRead() (n uint32, err error) {
+	defer c.handleErr(err)
 	return c.conn.ReadyToRead()
 }
 
 func (c *Uart) ResetInputBuffer() (err error) {
+	defer c.handleErr(err)
 	return c.conn.ResetInputBuffer()
+}
+
+func (c *Uart) handleErr(err error) {
+	if err == nil || errors.Is(err, connWrap.ErrTimeout) {
+		return
+	}
+	c.reopenUntilSuccess()
 }

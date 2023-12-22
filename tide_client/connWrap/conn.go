@@ -28,11 +28,18 @@ func NewConnUtil(conn ConnCommon) *ConnUtil {
 	}
 }
 
+func (c *ConnUtil) WriteCommand(input []byte) (n int, err error) {
+	if err = c.ResetInputBuffer(); err != nil {
+		return 0, err
+	}
+	return c.Write(input)
+}
+
 func (c *ConnUtil) ReadLine(input []byte) (line string, err error) {
 	defer c.UnlockCheckNotTimeout(err)
 	c.Lock()
 
-	_, err = c.Write(input)
+	_, err = c.WriteCommand(input)
 	if err != nil {
 		return "", err
 	}
@@ -44,7 +51,7 @@ func (c *ConnUtil) Scan(wait time.Duration, input []byte, outputF string, v ...i
 	defer c.UnlockCheckNotTimeout(err)
 	c.Lock()
 	time.Sleep(wait)
-	_, err = c.Write(input)
+	_, err = c.WriteCommand(input)
 	if err != nil {
 		return &Error{Type: ErrIO, Send: input, Err: err}
 	}
@@ -59,7 +66,7 @@ func (c *ConnUtil) CustomCommand(input []byte) (received []byte, err error) {
 	defer c.UnlockCheckNotTimeout(err)
 	c.Lock()
 
-	if _, err = c.Write(input); err != nil {
+	if _, err = c.WriteCommand(input); err != nil {
 		return nil, err
 	}
 	var buf = make([]byte, 100)
@@ -120,7 +127,7 @@ func (c *ConnUtil) GetSDI12Data(addr string, extraWakeTime byte, resultsExpected
 			input = append(input, extraWakeTime, arduinoCommandEnd)
 		}
 		time.Sleep(time.Second)
-		if _, err = c.Write(input); err != nil {
+		if _, err = c.WriteCommand(input); err != nil {
 			return nil, &Error{Type: ErrIO, Err: err}
 		}
 		if _, err = reader.Discard(1); err != nil { // sensor address

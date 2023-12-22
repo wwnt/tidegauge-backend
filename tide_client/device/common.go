@@ -47,18 +47,19 @@ type Device interface {
 func AddCronJob(cron string, items map[string]string, provideItems map[string]int, job func() map[string]*float64) {
 	verifyItems(items, provideItems)
 	var (
-		inQuery int32 = 0
+		inQuery atomic.Bool
 		tmpData map[string]*float64
 	)
 
 	jobWrap := func() {
 		// Determine if this device is being queried
-		if !atomic.CompareAndSwapInt32(&inQuery, 0, 1) {
+		if !inQuery.CompareAndSwap(false, true) {
 			global.Log.Errorf("The query interval is too short. items: %+v", items)
 			return
 		}
+		defer inQuery.Store(false)
+
 		tmpData = job()
-		atomic.StoreInt32(&inQuery, 0)
 
 		var sendData []itemData
 		for itemType, itemName := range items {
@@ -75,16 +76,18 @@ func AddCronJobWithOneItem(cron string, itemName string, job func() *float64) {
 		global.Log.Fatalf("item_name is empty")
 	}
 	var (
-		inQuery int32 = 0
+		inQuery atomic.Bool
 	)
 	jobWrap := func() {
 		// Determine if this device is being queried
-		if !atomic.CompareAndSwapInt32(&inQuery, 0, 1) {
+		if !inQuery.CompareAndSwap(false, true) {
 			global.Log.Errorf("The query interval is too short. item_name: %v", itemName)
 			return
 		}
+		defer inQuery.Store(false)
+
 		val := job()
-		atomic.StoreInt32(&inQuery, 0)
+
 		DataReceive <- []itemData{{Typ: common.MsgData, ItemName: itemName, Value: val}}
 	}
 	pkg.Must2(global.CronJob.AddFunc(cron, jobWrap))

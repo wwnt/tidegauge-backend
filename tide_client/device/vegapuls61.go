@@ -35,7 +35,7 @@ func (vegaPULS61) NewDevice(c interface{}, rawConf json.RawMessage) map[string]m
 	)
 	var job = func() *float64 {
 		conn.Lock()
-		defer conn.Unlock()
+		defer conn.Unlock() // must be locked to prevent simultaneous operations
 		results, err = client.ReadInputRegisters(2000, 4)
 		if err != nil {
 			global.Log.Error(err)
