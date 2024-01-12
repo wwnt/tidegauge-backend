@@ -20,6 +20,7 @@
   * [config.sdi12 | analog](#configsdi12--analog)
     * [config.sdi12[].model](#configsdi12model)
     * [config.sdi12[].config](#configsdi12config)
+    * [config.analog[]](#configanalog)
 <!-- TOC -->
 
 # config.json
@@ -99,7 +100,7 @@ In this example it will be read in [device/arduino.go](device/arduino.go)
 
 ## config.sdi12 | analog
 
-There are two types of devices that can be connected to arduino.
+Arduino can connect multiple sdi-12 or analog devices, so it is an array.
 
 ### config.sdi12[].model
 
@@ -119,3 +120,7 @@ A few notes:
 4. cron: The cron expression used to read the data.
    [Check the cron documentation](https://pkg.go.dev/github.com/robfig/cron/v3),
    and Seconds field is optional.[Check the code where is setting `cron.SecondOptional`](global/config.go)
+
+### config.analog[]
+
+Config that will be read by analog device.
