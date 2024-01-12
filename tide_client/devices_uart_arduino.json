@@ -8,7 +8,24 @@
 	},
 	"model": "arduino",
 	"config": {
-		"sdi12": [],
+		"sdi12": [
+			{
+				"model": "PLS-C",
+				"config": {
+					"device_name": "地点1压力水位计",
+					"extra_wake_time": 4,
+					"addr": "1",
+					"cron": "@every 40s",
+					"items": {
+						"water_level": "location1_water_level",
+						"water_temperature": "location1_water_temperature",
+						"water_conductivity": "location1_water_conductivity",
+						"water_salinity": "location1_water_salinity",
+						"water_total_dissolved_solids": "location1_water_total_dissolved_solids"
+					}
+				}
+			}
+		],
 		"analog": [
 			{
 				"device_name": "地点1雨探测器",
