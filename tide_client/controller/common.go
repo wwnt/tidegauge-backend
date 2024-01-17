@@ -18,10 +18,10 @@ var (
 	dataReceiveMu sync.Mutex
 
 	connRegMu sync.RWMutex
-	connReg   = make(map[string]interface{})
+	connReg   = make(map[string]any)
 )
 
-func RegisterConn(name string, d interface{}) {
+func RegisterConn(name string, d any) {
 	connRegMu.Lock()
 	defer connRegMu.Unlock()
 	if d == nil {
@@ -33,7 +33,7 @@ func RegisterConn(name string, d interface{}) {
 	connReg[name] = d
 }
 
-func GetRegConn(name string) interface{} {
+func GetRegConn(name string) any {
 	return connReg[name]
 }
 

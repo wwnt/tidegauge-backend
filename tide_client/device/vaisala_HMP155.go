@@ -18,7 +18,7 @@ type hMP155 struct{}
 
 var hmp155Items = map[string]int{"air_humidity": 0, "air_temperature": 1}
 
-func (hMP155) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (hMP155) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	conn := c.(*connWrap.ConnUtil)
 	var conf struct {
 		DeviceName string            `json:"device_name"`

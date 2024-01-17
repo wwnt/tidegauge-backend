@@ -62,9 +62,9 @@ func EditStation(s *Station) (err error) {
 	defer func() { _ = tx.Rollback() }()
 	if s.Id == uuid.Nil {
 		// create
-		var deletedAt interface{}
+		var deletedAt any
 		if err = tx.QueryRow(`select id, deleted_at from stations where identifier=$1 and upstream=false`, s.Identifier).Scan(&s.Id, &deletedAt); err != nil {
-			if err != sql.ErrNoRows {
+			if !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
 			if s.Id, err = uuid.NewUUID(); err != nil {

@@ -19,8 +19,8 @@ type StationInfoStruct struct {
 }
 
 type SendMsgStruct struct {
-	Type MsgType     `json:"type"`
-	Body interface{} `json:"body"`
+	Type MsgType `json:"type"`
+	Body any     `json:"body"`
 }
 
 type ReceiveMsgStruct struct {

@@ -13,7 +13,7 @@ func init() {
 
 type uartSdi12 struct{}
 
-func (d uartSdi12) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (d uartSdi12) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	conn := c.(*connWrap.ConnUtil)
 	conn.Typ = "uart-sdi12"
 	var conf []struct {

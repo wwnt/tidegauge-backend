@@ -21,7 +21,7 @@ func (t TimeSecond) ToTime() time.Time {
 func (t TimeSecond) Value() (driver.Value, error) {
 	return t.ToTime(), nil
 }
-func (t *TimeSecond) Scan(src interface{}) error {
+func (t *TimeSecond) Scan(src any) error {
 	switch s := src.(type) {
 	case time.Time:
 		*t = ToTimeSecond(s)
@@ -52,7 +52,7 @@ func (t TimeMillisecond) ToTime() time.Time {
 func (t TimeMillisecond) Value() (driver.Value, error) {
 	return t.ToTime(), nil
 }
-func (t *TimeMillisecond) Scan(src interface{}) error {
+func (t *TimeMillisecond) Scan(src any) error {
 	switch s := src.(type) {
 	case time.Time:
 		*t = ToTimeMillisecond(s)

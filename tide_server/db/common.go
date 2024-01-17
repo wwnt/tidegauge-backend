@@ -6,7 +6,6 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 	"tide/common"
-	"tide/pkg/custype"
 	"tide/tide_server/global"
 	"time"
 )
@@ -67,7 +66,7 @@ func checkResult(res sql.Result, err error) (int64, error) {
 }
 
 func setAllDisconnected() error {
-	now := custype.ToTimeMillisecond(time.Now()).ToTime()
+	now := time.Now().Truncate(time.Millisecond)
 	_, err := TideDB.Exec(`update stations set status=$1, status_changed_at=$2 where upstream=false and status!=$1`, common.Disconnected, now)
 	return err
 }

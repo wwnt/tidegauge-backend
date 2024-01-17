@@ -15,10 +15,10 @@ var (
 	DevicesUartConn = make(map[string]*connWrap.ConnUtil)
 
 	devicesMu sync.RWMutex
-	devices   = make(map[string]interface{})
+	devices   = make(map[string]any)
 )
 
-func RegisterDevice(name string, d interface{}) {
+func RegisterDevice(name string, d any) {
 	devicesMu.Lock()
 	defer devicesMu.Unlock()
 	if d == nil {
@@ -30,7 +30,7 @@ func RegisterDevice(name string, d interface{}) {
 	devices[name] = d
 }
 
-func GetDevice(m string) interface{} {
+func GetDevice(m string) any {
 	return devices[m]
 }
 
@@ -41,7 +41,7 @@ type itemData struct {
 }
 
 type Device interface {
-	NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap
+	NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap
 }
 
 func AddCronJob(cron string, items map[string]string, provideItems map[string]int, job func() map[string]*float64) {

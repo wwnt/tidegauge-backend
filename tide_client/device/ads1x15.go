@@ -16,7 +16,7 @@ func init() {
 
 type ads1115 struct{}
 
-func (ads1115) NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (ads1115) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 	bus := conn.(i2c.Bus)
 	var conf struct {
 		Addr  uint16 `json:"addr"`

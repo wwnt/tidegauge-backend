@@ -2,6 +2,7 @@ package device
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/warthog618/gpiod"
 	"syscall"
 	"tide/common"
@@ -17,7 +18,7 @@ func init() {
 
 type rg13 struct{}
 
-func (rg13) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (rg13) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	gpio := c.(*gpiod.Chip)
 	var conf struct {
 		DeviceName string `json:"device_name"`
@@ -33,7 +34,7 @@ func (rg13) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMapMa
 			DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &val}}
 		}))
 	if err != nil {
-		if err == syscall.Errno(22) {
+		if errors.Is(err, syscall.Errno(22)) {
 			global.Log.Error("Note that the WithPullDown option requires kernel V5.5 or later - check your kernel version.")
 		}
 		global.Log.Fatalf("RequestLine returned error: %s\n", err)

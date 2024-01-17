@@ -126,6 +126,7 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 					portTerminal(stream)
 				case common.MsgCameraSnapShot:
 					cameraSnapshot(stream)
+				default:
 				}
 			}()
 		}

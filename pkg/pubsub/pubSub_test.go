@@ -65,8 +65,8 @@ func TestPubSub_LimitTopicScope(t *testing.T) {
 
 func TestPubSub_Publish(t *testing.T) {
 	type args struct {
-		data   interface{}
-		subKey interface{}
+		data   any
+		subKey any
 	}
 	tests := []struct {
 		name    string
@@ -82,9 +82,9 @@ func TestPubSub_Publish(t *testing.T) {
 				p := NewPubSub()
 				conn1, conn2 := net.Pipe()
 				subscriber := NewSubscriber(nil, conn1)
-				ch := make(chan interface{}, 1)
+				ch := make(chan any, 1)
 				go func() {
-					var val interface{}
+					var val any
 					err := json.NewDecoder(conn2).Decode(&val)
 					require.NoError(t, err)
 					ch <- val

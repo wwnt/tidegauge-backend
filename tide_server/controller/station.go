@@ -164,7 +164,7 @@ func DataHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, ds)
 }
 
-//func bind(c *gin.Context, obj interface{}) bool {
+//func bind(c *gin.Context, obj any) bool {
 //	if errs := c.ShouldBind(obj); errs != nil {
 //		logger.Error(errs.Error())
 //		if errs, ok := errs.(validator.ValidationErrors); ok {

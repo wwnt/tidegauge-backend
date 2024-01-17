@@ -171,6 +171,7 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 			}
 			// save and publish
 			saveAndUpdateItemStatus(stationId, info.Identifier, body)
+		default:
 		}
 	}
 }

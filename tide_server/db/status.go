@@ -66,7 +66,7 @@ type pagedItemStatusLogStruct struct {
 	Data  []common.StationIdItemStatusStruct `json:"data"`
 }
 
-func PagedItemStatusLogs(pageNum, pageSize uint) (interface{}, error) {
+func PagedItemStatusLogs(pageNum, pageSize uint) (any, error) {
 	var ds pagedItemStatusLogStruct
 	err := TideDB.QueryRow(`select count(*) from item_status_log`).Scan(&ds.Total)
 	if err != nil {

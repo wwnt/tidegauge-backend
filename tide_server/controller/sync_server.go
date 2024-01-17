@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
@@ -240,7 +241,8 @@ func fillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 			if msec > 0 {
 				ds, err := db.GetDataHistory(stationId, itemName, msec, 0)
 				if err != nil {
-					if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "42P01" {
+					var pgErr *pgconn.PgError
+					if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
 						// relation Table does not exist
 						continue
 					}

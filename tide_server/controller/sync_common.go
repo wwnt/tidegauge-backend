@@ -37,21 +37,21 @@ type forwardDataStruct struct {
 	common.DataTimeStruct
 }
 
-func Publish(pub *pubsub.PubSub, msg interface{}, key interface{}) {
+func Publish(pub *pubsub.PubSub, msg any, key any) {
 	if err := pub.Publish(msg, key); err != nil {
 		zap.L().WithOptions(zap.AddCallerSkip(1)).DPanic("publish", zap.Error(err))
 	}
 }
 
-func sendToConfigPubSub(typ string, body interface{}) {
+func sendToConfigPubSub(typ string, body any) {
 	if err := configPubSub.Publish(SendMsgStruct{typ, body}, nil); err != nil {
 		zap.L().WithOptions(zap.AddCallerSkip(1)).DPanic("publish", zap.Error(err))
 	}
 }
 
 type SendMsgStruct struct {
-	Type string      `json:"type"`
-	Body interface{} `json:"body"`
+	Type string `json:"type"`
+	Body any    `json:"body"`
 }
 type RcvMsgStruct struct {
 	Type string          `json:"type"`

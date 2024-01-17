@@ -16,7 +16,7 @@ func init() {
 
 type vegaPULS61 struct{}
 
-func (vegaPULS61) NewDevice(c interface{}, rawConf json.RawMessage) map[string]map[string]string {
+func (vegaPULS61) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]string {
 	conn := c.(*connWrap.ConnUtil)
 	var conf struct {
 		DeviceName string `json:"device_name"`

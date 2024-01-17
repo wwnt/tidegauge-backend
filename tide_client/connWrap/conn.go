@@ -47,7 +47,7 @@ func (c *ConnUtil) ReadLine(input []byte) (line string, err error) {
 	return line, err
 }
 
-func (c *ConnUtil) Scan(wait time.Duration, input []byte, outputF string, v ...interface{}) (err error) {
+func (c *ConnUtil) Scan(wait time.Duration, input []byte, outputF string, v ...any) (err error) {
 	defer c.UnlockCheckNotTimeout(err)
 	c.Lock()
 	time.Sleep(wait)

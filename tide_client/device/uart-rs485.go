@@ -12,7 +12,7 @@ func init() {
 
 type uartRs485 struct{}
 
-func (uartRs485) NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (uartRs485) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 	var conf []struct {
 		Model  string          `json:"model"`
 		Config json.RawMessage `json:"config"`

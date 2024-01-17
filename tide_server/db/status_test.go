@@ -67,7 +67,7 @@ func TestPagedItemStatusLogs(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    args
-		want    interface{}
+		want    any
 		wantErr assert.ErrorAssertionFunc
 	}{
 		{name: "get", args: args{pageNum: 1, pageSize: 10}, want: pagedItemStatusLogStruct{Total: len(station1StatusLogs), Data: []common.StationIdItemStatusStruct{

@@ -12,7 +12,7 @@ func init() {
 
 type gpioTestDevice struct{}
 
-func (gpioTestDevice) NewDevice(_ interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (gpioTestDevice) NewDevice(_ any, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		DeviceName string `json:"device_name"`
 		Pin        int    `json:"pin"`
@@ -35,7 +35,7 @@ type uartTestDevice struct{}
 
 var uartTestDeviceItems = map[string]int{"air_humidity": 0, "air_temperature": 1}
 
-func (uartTestDevice) NewDevice(_ interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (uartTestDevice) NewDevice(_ any, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		Addr       string            `json:"addr"`
 		DeviceName string            `json:"device_name"`
