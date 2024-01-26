@@ -5,7 +5,6 @@ go 1.21
 require (
 	github.com/Nerzal/gocloak/v13 v13.8.0
 	github.com/PuerkitoBio/goquery v1.8.1
-	github.com/albenik/go-serial/v2 v2.6.0
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.5.0

@@ -57,7 +57,7 @@ func main() {
 		log.Println("connected from:", tcpConnNew.RemoteAddr())
 
 		for {
-			uartConn, err = openSerial(portName, baudRate, dataBits, parity)
+			uartConn, err = openSerial(*portName, *baudRate, *dataBits, *parity)
 			if err != nil {
 				log.Println(err)
 				time.Sleep(5 * time.Second)
@@ -109,26 +109,29 @@ func main() {
 	}
 }
 
-func openSerial(portName *string, baudRate *int, dataBits *int, parity *string) (serial.Port, error) {
-	port, err := serial.Open(*portName, &serial.Mode{
-		BaudRate: *baudRate,
-		DataBits: *dataBits,
-		Parity:   selectParity(*parity),
+func openSerial(portName string, baudRate int, dataBits int, parity string) (serial.Port, error) {
+	port, err := serial.Open(portName, &serial.Mode{
+		BaudRate: baudRate,
+		DataBits: dataBits,
+		Parity:   getParity(parity),
 		StopBits: serial.OneStopBit,
 	})
 	return port, err
 }
 
-func selectParity(parity string) serial.Parity {
+func getParity(parity string) serial.Parity {
 	parity = strings.ToLower(parity)
-	switch parity {
-	case "none":
-		return serial.NoParity
-	case "odd":
-		return serial.OddParity
-	case "even":
-		return serial.EvenParity
-	default:
+	if p, ok := parityMap[parity]; ok {
+		return p
+	} else {
 		return serial.NoParity
 	}
+}
+
+var parityMap = map[string]serial.Parity{
+	"none":  serial.NoParity,
+	"odd":   serial.OddParity,
+	"even":  serial.EvenParity,
+	"mark":  serial.MarkParity,
+	"space": serial.SpaceParity,
 }

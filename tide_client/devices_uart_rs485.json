@@ -4,9 +4,9 @@
     "mode": {
         "baud_rate": 9600,
         "data_bits": 7,
-        "parity": 2
+        "parity": "Even"
     },
-    "model": "uart-rs485",
+    "model": "bus",
     "config": [
         {
             "model": "PWD50",
