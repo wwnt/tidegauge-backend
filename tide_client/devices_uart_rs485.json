@@ -6,7 +6,7 @@
         "data_bits": 7,
         "parity": "Even"
     },
-    "model": "bus",
+    "model": "uart-rs485",
     "config": [
         {
             "model": "PWD50",

@@ -8,23 +8,23 @@ import (
 )
 
 func init() {
-	RegisterDevice("bus", &bus{})
+	RegisterDevice("uart-rs232", &uartRs232{})
 }
 
-type bus struct{}
+type uartRs232 struct{}
 
-func (bus) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
+func (uartRs232) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	conn := c.(*connWrap.ConnUtil)
-	conn.Typ = "bus"
-	var conf []struct {
+	conn.Typ = "uart-rs232"
+	var conf struct {
 		Model  string          `json:"model"`
 		Config json.RawMessage `json:"config"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 	var info = make(common.StringMapMap)
-	for _, subDevice := range conf {
-		subInfo := GetDevice(subDevice.Model).(Device).NewDevice(conn, subDevice.Config)
-		MergeInfo(info, subInfo)
-	}
+
+	subInfo := GetDevice(conf.Model).(Device).NewDevice(conn, conf.Config)
+	MergeInfo(info, subInfo)
+
 	return info
 }

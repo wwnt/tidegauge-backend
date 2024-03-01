@@ -1,18 +1,16 @@
 {
     "addr": "192.168.1.109:7004",
     "read_timeout": 1000,
-    "model": "bus",
-    "config": [
-        {
-            "model": "PTB330",
-            "config": {
-                "device_name": "地点1气压计",
-                "cron": "@every 20s",
-                "addr": "3",
-                "items": {
-			"air_pressure": "location1_air_pressure"
-		}
+    "model": "uart-rs232",
+    "config": {
+        "model": "PTB330",
+        "config": {
+            "device_name": "地点1气压计",
+            "cron": "@every 20s",
+            "addr": "3",
+            "items": {
+                "air_pressure": "location1_air_pressure"
             }
         }
-    ]
+    }
 }

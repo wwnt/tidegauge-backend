@@ -1,7 +1,7 @@
 {
     "addr": "192.168.1.109:7003",
     "read_timeout": 1000,
-    "model": "bus",
+    "model": "uart-rs485",
     "config": [
         {
             "model": "VEGAPULS61",
