@@ -82,7 +82,7 @@ func (c *Uart) reopenUntilSuccess() {
 func (c *Uart) open() error {
 	port, err := serial.Open(c.portName, &c.mode)
 	if err == nil {
-		if err = port.SetReadTimeout(time.Millisecond); err == nil {
+		if err = port.SetReadTimeout(c.readTimeout); err == nil {
 			c.conn = port
 		}
 	}

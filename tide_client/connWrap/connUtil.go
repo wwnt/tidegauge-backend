@@ -48,7 +48,7 @@ func (c *ConnUtil) ReadLine(input []byte) (line string, err error) {
 	return line, err
 }
 
-func (c *ConnUtil) Scan(wait time.Duration, input []byte, outputF string, v ...any) (err error) {
+func (c *ConnUtil) Scan(input []byte, outputF string, v ...any) (err error) {
 	defer c.UnlockCheckNotTimeout(err)
 	c.Lock()
 	_, err = c.writeCommand(input)
@@ -91,7 +91,7 @@ func (c *ConnUtil) SDI12ConcurrentMeasurement(addr string, extraWakeTime byte, o
 		input = append(input, extraWakeTime, arduinoCommandEnd)
 	}
 
-	if err := c.Scan(time.Second, input, output); err != nil {
+	if err := c.Scan(input, output); err != nil {
 		return err
 	}
 	time.Sleep(wait)
@@ -149,6 +149,6 @@ func (c *ConnUtil) GetSDI12Data(addr string, extraWakeTime byte, resultsExpected
 func (c *ConnUtil) AnalogRead(pin byte) (int, error) {
 	var output = "%d\r\n"
 	var val int
-	err := c.Scan(0, []byte{pin, arduinoCommandEnd}, output, &val)
+	err := c.Scan([]byte{pin, arduinoCommandEnd}, output, &val)
 	return val, err
 }
