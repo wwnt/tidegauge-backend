@@ -22,3 +22,5 @@
 /tide_server/tide.service
 
 _*
+/uart-tcp-forward/uart-tcp-forward
+/tide_server/config.json

@@ -47,7 +47,6 @@ sudoedit /etc/systemd/system/rs485-tcp-forward.service
 [Unit]
 Description=Uart Tcp Forward Service
 After=network.target
-After=network.target
 
 [Service]
 RestartSec=5s
