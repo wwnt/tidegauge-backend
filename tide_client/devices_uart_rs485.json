@@ -1,5 +1,5 @@
 {
-    "port": "/dev/tty.usb-1.4",
+    "port": "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AK06YNFW-if00-port0",
     "read_timeout": 1000,
     "mode": {
         "baud_rate": 9600,

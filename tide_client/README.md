@@ -7,8 +7,8 @@
 * [4. Init sqlite database tables](#4-init-sqlite-database-tables)
 * [5. Build client on wsl2 or Linux](#5-build-client-on-wsl2-or-linux)
 * [6. Install as service](#6-install-as-service)
-* [7. Fix raspberry pi usb device name](#7-fix-raspberry-pi-usb-device-name)
-  * [7.1. Checkout the usb serial device name](#71-checkout-the-usb-serial-device-name)
+* [7. Determine location of the usb serial device](#7-determine-location-of-the-usb-serial-device)
+  * [7.1. Checkout which id is the USB serial device we just inserted](#71-checkout-which-id-is-the-usb-serial-device-we-just-inserted)
 * [8. Sensor Init](#8-sensor-init)
   * [8.1. RS485](#81-rs485)
     * [8.1.1. HMP155](#811-hmp155)
@@ -113,48 +113,28 @@ sudo cp tidegauge.service /etc/systemd/system
 
 Then start the service `sudo systemctl enable --now tidegauge.service`
 
-# 7. Fix raspberry pi usb device name
+# 7. Determine location of the usb serial device
 
 ```shell
-cat > /etc/udev/rules.d/99-usb-serial.rules << EOF
-SUBSYSTEM=="tty", SUBSYSTEMS=="usb", DRIVERS=="usb", SYMLINK+="tty.usb-$attr{devpath}"
-EOF
+pi@raspberrypi:~ $ ls -l /dev/serial/by-id/
+total 0
+lrwxrwxrwx 1 root root 13 Sep  6 19:04 usb-Arduino__www.arduino.cc__0043_9573535303235170C020-if00 -> ../../ttyACM0
 ```
 
-Then reboot your raspberry pi.
-
-## 7.1. Checkout the usb serial device name
+## 7.1. Checkout which id is the USB serial device we just inserted
 
 ```
 pi@raspberrypi:~ $ dmesg
-
-[  356.428976] usb 1-1.2: new full-speed USB device number 4 using xhci_hcd
-[  356.544076] usb 1-1.2: New USB device found, idVendor=2341, idProduct=0043, bcdDevice= 0.01
-[  356.544096] usb 1-1.2: New USB device strings: Mfr=1, Product=2, SerialNumber=220
-[  356.544109] usb 1-1.2: Manufacturer: Arduino (www.arduino.cc)
-[  356.544123] usb 1-1.2: SerialNumber: 9573535303235170C020
-[  356.554983] cdc_acm 1-1.2:1.0: ttyACM0: USB ACM device
-[  402.181575] usb 1-1.2: USB disconnect, device number 4
-[  404.817696] usb 1-1.3: new full-speed USB device number 5 using xhci_hcd
-[  404.932937] usb 1-1.3: New USB device found, idVendor=2341, idProduct=0043, bcdDevice= 0.01
-[  404.932955] usb 1-1.3: New USB device strings: Mfr=1, Product=2, SerialNumber=220
-[  404.932969] usb 1-1.3: Manufacturer: Arduino (www.arduino.cc)
-[  404.932982] usb 1-1.3: SerialNumber: 9573535303235170C020
-[  404.937917] cdc_acm 1-1.3:1.0: ttyACM0: USB ACM device
-
-pi@raspberrypi:~ $ ls -l /dev/tty.usb*
-lrwxrwxrwx 1 root root 7 Sep  1 11:21 /dev/tty.usb-1.3 -> ttyACM0
+...
+[1211472.086501] usb 1-1.3: new full-speed USB device number 44 using xhci_hcd
+[1211472.201583] usb 1-1.3: New USB device found, idVendor=2341, idProduct=0043, bcdDevice= 0.01
+[1211472.201605] usb 1-1.3: New USB device strings: Mfr=1, Product=2, SerialNumber=220
+[1211472.201618] usb 1-1.3: Manufacturer: Arduino (www.arduino.cc)
+[1211472.201629] usb 1-1.3: SerialNumber: 9573535303235170C020
+[1211472.209045] cdc_acm 1-1.3:1.0: ttyACM0: USB ACM device
 ```
 
-The device name of raspberry pi 4b will be like this:
-
-```
- -------------------------------------------------
-| /dev/tty.usb-1.3 | /dev/tty.usb-1.1 |          |
-|------------------|------------------| Ethernet |
-| /dev/tty.usb-1.4 | /dev/tty.usb-1.2 |          |
- -------------------------------------------------
-```
+Then you can configure the `port` in the configuration to `/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_9573535303235170C020-if00`.
 
 # 8. Sensor Init
 

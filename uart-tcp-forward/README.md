@@ -54,7 +54,7 @@ User=pi
 Group=pi
 WorkingDirectory=/home/pi/tide
 
-ExecStart=/home/pi/tide/uart-tcp-forward -l :7000 -s /dev/tty.usb-1.2
+ExecStart=/home/pi/tide/uart-tcp-forward -l :7000 -s /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AK06YNFW-if00-port0
 Restart=on-failure
 
 [Install]
@@ -69,5 +69,5 @@ pi@raspberrypi:~ $ journalctl -u rs485-tcp-forward.service
 Sep 01 12:18:13 raspberrypi systemd[1]: Started Uart Tcp Forward Service.
 Sep 01 12:18:13 raspberrypi uart-tcp-forward[2619]: 2022/09/01 12:18:13 main.go:47: listen on: :7001
 Sep 01 12:18:22 raspberrypi uart-tcp-forward[2619]: 2022/09/01 12:18:22 main.go:57: connected from: 192.168.1.38:47486
-Sep 01 12:18:24 raspberrypi uart-tcp-forward[2619]: 2022/09/01 12:18:24 main.go:65: connected to: /dev/tty.usb-1.3
+Sep 01 12:18:24 raspberrypi uart-tcp-forward[2619]: 2022/09/01 12:18:24 main.go:65: connected to: /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AK06YNFW-if00-port0
 ```

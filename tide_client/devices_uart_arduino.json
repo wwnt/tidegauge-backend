@@ -1,5 +1,5 @@
 {
-    "port": "/dev/tty.usb-1.4",
+    "port": "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_9573535303235170C020-if00",
     "read_timeout": 2000,
     "mode": {
         "baud_rate": 9600,
