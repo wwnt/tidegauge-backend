@@ -73,7 +73,7 @@
 
 # 3. Flash Arduino
 
-Check [README.md](../arduino/README.md)
+Check [arduino/README.md](../arduino/README.md)
 
 # 4. Init sqlite database tables
 
