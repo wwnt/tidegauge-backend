@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
 	"net/http"
@@ -34,8 +33,6 @@ var (
 	ErrUserEmpty     = errors.New("the username or password is empty")
 	ErrUserNotFound  = errors.New("user not found")
 	ErrUserDuplicate = errors.New("user duplicate")
-
-	UserManagers map[string]func(json.RawMessage) UserManager
 )
 
 // UserManager is the interface that can manage users.
@@ -68,22 +65,4 @@ type Permission interface {
 	CheckCameraStatusPermission(username string, stationId uuid.UUID, name string) bool
 	GetCameraStatusPermissions(string) (map[uuid.UUID][]string, error)
 	EditCameraStatusPermission(string, map[uuid.UUID][]string) error
-}
-
-func RegisterUserManager(name string, f func(json.RawMessage) UserManager) {
-	if f == nil {
-		panic("Register userManager is nil")
-	}
-	if _, dup := UserManagers[name]; dup {
-		panic("Register called twice for userManager: " + name)
-	}
-	UserManagers[name] = f
-}
-
-func GetUserManager(name string, rawConf json.RawMessage) UserManager {
-	f, ok := UserManagers[name]
-	if !ok {
-		panic("haven't registered " + name + " userManager yet")
-	}
-	return f(rawConf)
 }

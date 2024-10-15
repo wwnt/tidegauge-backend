@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/google/uuid"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5/pgconn"
 	"tide/common"
 	"tide/pkg/custype"
 	"time"
@@ -16,9 +16,11 @@ func GetItemsLatest(stationId uuid.UUID, itemsLatest common.StringMsecMap) error
 		if common.ContainsIllegalCharacter(itemName) {
 			return errors.New("evil table name: " + itemName)
 		}
-		err := TideDB.QueryRow("select max(timestamp) from "+itemName+" where station_id=$1", stationId).Scan(&t)
+		err := TideDB.QueryRow("select"+" max(timestamp) from "+itemName+" where station_id=$1", stationId).Scan(&t)
 		if err != nil {
-			if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "42P01" {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+				// relation Table does not exist
 				continue
 			}
 			return err
@@ -40,9 +42,9 @@ func GetDataHistory(stationId uuid.UUID, itemName string, start, end custype.Tim
 		ds  []common.DataTimeStruct
 	)
 	if start == 0 && end == 0 {
-		err = TideDB.QueryRow("select timestamp, value from "+itemName+" where station_id=$1 order by timestamp desc limit 1", stationId).Scan(&d.Millisecond, &d.Value)
+		err = TideDB.QueryRow("select"+" timestamp, value from "+itemName+" where station_id=$1 order by timestamp desc limit 1", stationId).Scan(&d.Millisecond, &d.Value)
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				err = nil
 			}
 			return ds, err
@@ -51,9 +53,9 @@ func GetDataHistory(stationId uuid.UUID, itemName string, start, end custype.Tim
 	} else {
 		var rows *sql.Rows
 		if end == 0 {
-			rows, err = TideDB.Query("select timestamp, value from "+itemName+" where station_id=$1 and timestamp>$2 order by timestamp", stationId, start)
+			rows, err = TideDB.Query("select"+" timestamp, value from "+itemName+" where station_id=$1 and timestamp>$2 order by timestamp", stationId, start)
 		} else {
-			rows, err = TideDB.Query("select timestamp, value from "+itemName+" where station_id=$1 and timestamp>$2 and timestamp<$3 order by timestamp", stationId, start, end)
+			rows, err = TideDB.Query("select"+" timestamp, value from "+itemName+" where station_id=$1 and timestamp>$2 and timestamp<$3 order by timestamp", stationId, start, end)
 		}
 		if err != nil {
 			return ds, err
@@ -76,7 +78,7 @@ func SaveDataHistory(stationId uuid.UUID, itemName string, itemValue float64, tm
 	if common.ContainsIllegalCharacter(itemName) {
 		return 0, errors.New("Table name contains illegal characters: " + itemName)
 	}
-	res, err := TideDB.Exec(`insert into `+itemName+` (station_id, value, timestamp) VALUES ($1,$2,$3) on conflict do nothing`, stationId, itemValue, tm)
+	res, err := TideDB.Exec("insert"+" into "+itemName+" (station_id, value, timestamp) VALUES ($1,$2,$3) on conflict do nothing", stationId, itemValue, tm)
 	return checkResult(res, err)
 }
 
@@ -84,8 +86,8 @@ func GetLatestDataTime(stationId uuid.UUID, itemName string) (ts custype.TimeMil
 	if common.ContainsIllegalCharacter(itemName) {
 		return 0, errors.New("Table name contains illegal characters: " + itemName)
 	}
-	err = TideDB.QueryRow("select timestamp from "+itemName+" where station_id=$1 order by timestamp desc limit 1", stationId).Scan(&ts)
-	if err != nil && err == sql.ErrNoRows {
+	err = TideDB.QueryRow("select"+" timestamp from "+itemName+" where station_id=$1 order by timestamp desc limit 1", stationId).Scan(&ts)
+	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	return ts, err

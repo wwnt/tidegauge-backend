@@ -15,7 +15,7 @@ func SendMail(to []string, body string) error {
 }
 
 func mailDelUser(username string, addr string) {
-	if err := SendMail([]string{addr}, "Your account: "+username+" has been deleted."); err != nil {
+	if err := SendMail([]string{addr}, "Account: "+username+" has been deleted."); err != nil {
 		logger.Warn(err.Error())
 	}
 }

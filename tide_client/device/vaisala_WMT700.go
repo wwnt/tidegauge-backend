@@ -18,7 +18,7 @@ type wmt700 struct{}
 
 var wmt700Items = map[string]int{"wind_speed": 0, "wind_direction": 1}
 
-func (wmt700) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (wmt700) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	conn := c.(*connWrap.ConnUtil)
 	var conf struct {
 		DeviceName string            `json:"device_name"`

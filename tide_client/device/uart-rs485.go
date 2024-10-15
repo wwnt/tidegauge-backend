@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"tide/common"
 	"tide/pkg"
+	"tide/tide_client/connWrap"
 )
 
 func init() {
@@ -12,7 +13,9 @@ func init() {
 
 type uartRs485 struct{}
 
-func (uartRs485) NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (uartRs485) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
+	conn := c.(*connWrap.ConnUtil)
+	conn.Typ = "uart-rs485"
 	var conf []struct {
 		Model  string          `json:"model"`
 		Config json.RawMessage `json:"config"`

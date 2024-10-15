@@ -6,6 +6,7 @@ import (
 	"net"
 	"testing"
 	"tide/common"
+	"tide/pkg/pubsub"
 	"tide/tide_server/db"
 )
 
@@ -19,17 +20,18 @@ func Test_handleStationConnStream1(t *testing.T) {
 	conn3, conn4 := net.Pipe() // conn3: sync server   , conn4: sync client
 	defer func() { _ = conn3.Close() }()
 
-	configPubSub.SubscribeTopic(conn3, nil)
-	defer configPubSub.Evict(conn3)
+	subscriber := pubsub.NewSubscriber(nil, conn3)
+	configPubSub.SubscribeTopic(subscriber, nil)
+	defer configPubSub.Evict(subscriber)
 
-	statusPubSub.SubscribeTopic(conn3, nil)
-	defer statusPubSub.Evict(conn3)
+	statusPubSub.SubscribeTopic(subscriber, nil)
+	defer statusPubSub.Evict(subscriber)
 
-	dataPubSub.SubscribeTopic(conn3, nil)
-	defer dataPubSub.Evict(conn3)
+	dataPubSub.SubscribeTopic(subscriber, nil)
+	defer dataPubSub.Evict(subscriber)
 
-	missDataPubSub.SubscribeTopic(conn3, nil)
-	defer missDataPubSub.Evict(conn3)
+	missDataPubSub.SubscribeTopic(subscriber, nil)
+	defer missDataPubSub.Evict(subscriber)
 
 	go func() {
 		mockStationClient(t, conn1, station1Info)

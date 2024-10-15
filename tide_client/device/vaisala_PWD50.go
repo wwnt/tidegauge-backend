@@ -16,7 +16,7 @@ func init() {
 
 type pwd50 struct{}
 
-func (pwd50) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (pwd50) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	conn := c.(*connWrap.ConnUtil)
 	var conf struct {
 		ItemName   string `json:"item_name"`

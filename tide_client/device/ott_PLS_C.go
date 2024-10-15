@@ -10,14 +10,14 @@ import (
 )
 
 func init() {
-	RegisterDevice("PLS-C", &pls_c{})
+	RegisterDevice("PLS-C", &plsC{})
 }
 
-type pls_c struct{}
+type plsC struct{}
 
 var PLSCItems = map[string]int{"water_level": 0, "water_temperature": 1, "water_conductivity": 2, "water_salinity": 3, "water_total_dissolved_solids": 4}
 
-func (pls_c) NewDevice(c interface{}, rawConf json.RawMessage) map[string]map[string]string {
+func (plsC) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]string {
 	conn := c.(*connWrap.ConnUtil)
 	var conf struct {
 		Addr          string            `json:"addr"`

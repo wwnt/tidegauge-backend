@@ -2,10 +2,11 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
-	"github.com/jackc/pgconn"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.uber.org/zap"
 	"io"
 	"net"
@@ -18,7 +19,7 @@ import (
 
 func Sync(c *gin.Context) {
 	// make client's Response.Body implement io.ReadWriteCloser
-	// net/http/response.go:363
+	// net/http/response.go: func isProtocolSwitchResponse()
 	c.Writer.Header().Set("Upgrade", "websocket")
 	c.Writer.Header().Set("Connection", "Upgrade")
 	c.Writer.WriteHeader(http.StatusSwitchingProtocols)
@@ -87,16 +88,18 @@ func handleSyncServerConn(conn io.ReadWriteCloser, username string, permissions 
 			}
 		}
 	}
+	subscriber := pubsub.NewSubscriber(session.CloseChan(), stream1)
+
 	// increment and full are separated to avoid receiving increment first
 	// make sure subscribe first
 	{
-		addUserConn(username, stream1, connTypeSyncConfig)
-		defer delUserConn(username, stream1)
+		addUserConn(username, subscriber, connTypeSyncConfig)
+		defer delUserConn(username, subscriber)
 
-		configPubSub.SubscribeTopic(stream1, nil)
-		defer configPubSub.Evict(stream1)
-		statusPubSub.SubscribeTopic(stream1, nil)
-		defer statusPubSub.Evict(stream1)
+		configPubSub.SubscribeTopic(subscriber, nil)
+		defer configPubSub.Evict(subscriber)
+		statusPubSub.SubscribeTopic(subscriber, nil)
+		defer statusPubSub.Evict(subscriber)
 	}
 
 	stream2, err := session.Accept()
@@ -178,14 +181,15 @@ func syncDataServer(username string, session *yamux.Session, permTopic pubsub.To
 	}
 	defer func() { _ = stream3.Close() }()
 
+	subscriber := pubsub.NewSubscriber(session.CloseChan(), stream3)
 	{
-		addUserConn(username, stream3, connTypeSyncData)
-		defer delUserConn(username, stream3)
+		addUserConn(username, subscriber, connTypeSyncData)
+		defer delUserConn(username, subscriber)
 
-		dataPubSub.SubscribeTopic(stream3, permTopic)
-		defer dataPubSub.Evict(stream3)
-		missDataPubSub.SubscribeTopic(stream3, permTopic)
-		defer missDataPubSub.Evict(stream3)
+		dataPubSub.SubscribeTopic(subscriber, permTopic)
+		defer dataPubSub.Evict(subscriber)
+		missDataPubSub.SubscribeTopic(subscriber, permTopic)
+		defer missDataPubSub.Evict(subscriber)
 	}
 
 	stream4, err := session.Accept()
@@ -237,7 +241,9 @@ func fillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 			if msec > 0 {
 				ds, err := db.GetDataHistory(stationId, itemName, msec, 0)
 				if err != nil {
-					if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "42P01" {
+					var pgErr *pgconn.PgError
+					if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+						// relation Table does not exist
 						continue
 					}
 					logger.Error(err.Error())

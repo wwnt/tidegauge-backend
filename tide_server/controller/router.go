@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+const syncPath = "/sync"
+const loginPath = "/login"
+const cameraLatestSnapshotPath = "/cameraLatestSnapshot"
+
 func setupRouter() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
@@ -34,10 +38,10 @@ func setupRouter() *gin.Engine {
 
 	login := r.Group("/", validate)
 
-	r.POST("/login", Login)
+	r.POST(loginPath, Login)
 	login.POST("/logout", Logout)
 
-	login.POST("/sync", Sync)
+	login.POST(syncPath, Sync)
 
 	login.GET("/listUpstream", validateAdmin, ListUpstream)
 	login.POST("/editUpstream", validateAdmin, EditUpstream)
@@ -70,7 +74,7 @@ func setupRouter() *gin.Engine {
 	login.GET("/listItem", ListItem)
 
 	login.GET("/cameraSnapshot", validateLiveSnapshot, CameraLiveSnapshot)
-	login.GET("/cameraLatestSnapshot", CameraLatestSnapShot)
+	login.GET(cameraLatestSnapshotPath, CameraLatestSnapShot)
 	return r
 }
 

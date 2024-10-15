@@ -14,7 +14,7 @@ func init() {
 
 type se200 struct{}
 
-func (se200) NewDevice(c interface{}, rawConf json.RawMessage) map[string]map[string]string {
+func (se200) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]string {
 	conn := c.(*connWrap.ConnUtil)
 	var conf struct {
 		DeviceName    string `json:"device_name"`
@@ -27,7 +27,7 @@ func (se200) NewDevice(c interface{}, rawConf json.RawMessage) map[string]map[st
 
 	var (
 		err    error
-		output = conf.Addr + "00101\r\n2\r\n"
+		output = conf.Addr + "00101\r\n" + conf.Addr + "\r\n"
 	)
 	var job = func() *float64 {
 		err = conn.SDI12ConcurrentMeasurement(conf.Addr, conf.ExtraWakeTime, output, time.Second)

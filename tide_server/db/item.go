@@ -81,8 +81,12 @@ func EditItem(i Item) (err error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	_, err = tx.Exec(`insert into items(station_id,name,type,device_name,available) values ($1,$2,$3,$4,hstore('0', NULL)) on conflict (station_id,name) do update
-set type=excluded.type, device_name=excluded.device_name`, i.StationId, i.Name, i.Type, i.DeviceName)
+	_, err = tx.Exec(`with latestStatus as ((select status, changed_at from item_status_log where station_id = $1 and item_name = $2 order by row_id desc limit 1)
+union (select '', 'epoch'::timestamptz) order by changed_at desc limit 1)
+insert into items(station_id, name, type, device_name, available, status, status_changed_at) values
+($1,$2,$3,$4,hstore('0', NULL),(select latestStatus.status from latestStatus), (select latestStatus.changed_at from latestStatus))
+on conflict (station_id,name) do update
+set type = excluded.type, device_name = excluded.device_name`, i.StationId, i.Name, i.Type, i.DeviceName)
 	if err != nil {
 		return err
 	}
@@ -90,8 +94,13 @@ set type=excluded.type, device_name=excluded.device_name`, i.StationId, i.Name, 
 }
 
 func SyncItem(i Item) (int64, error) {
-	res, err := TideDB.Exec(`insert into items(station_id,name,type,device_name) values ($1,$2,$3,$4) on conflict (station_id,name) do update
-set type=excluded.type, device_name=excluded.device_name where items.type!=$3 or items.device_name!=$4`, i.StationId, i.Name, i.Type, i.DeviceName)
+	res, err := TideDB.Exec(`with latestStatus as ((select status, changed_at from item_status_log where station_id = $1 and item_name = $2 order by row_id desc limit 1)
+union (select '', 'epoch'::timestamptz) order by changed_at desc limit 1)
+insert into items(station_id, name, type, device_name, status, status_changed_at) values
+($1,$2,$3,$4,(select latestStatus.status from latestStatus), (select latestStatus.changed_at from latestStatus))
+on conflict (station_id,name) do update
+set type = excluded.type, device_name = excluded.device_name
+where items.type != $3 or items.device_name != $4`, i.StationId, i.Name, i.Type, i.DeviceName)
 	return checkResult(res, err)
 }
 
@@ -101,7 +110,7 @@ func DelItem(stationId uuid.UUID, name string) (int64, error) {
 }
 
 func GetAvailableItems() ([]common.StationItemStruct, error) {
-	rows, err := TideDB.Query(`select station_id, name from items where available!=''`)
+	rows, err := TideDB.Query(`select station_id, name from items where available != ''`)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +198,7 @@ func removeAvailableTx(tx *sql.Tx, stationId uuid.UUID, itemName string, upstrea
 	return err
 }
 
-func RemoveAllAvailable(upstreamId int) error {
+func RemoveAvailableByUpstreamId(upstreamId int) error {
 	tx, err := TideDB.Begin()
 	if err != nil {
 		return err

@@ -18,7 +18,7 @@ type ptb330 struct{}
 
 var ptb330Items = map[string]int{"air_pressure": 0}
 
-func (ptb330) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (ptb330) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	conn := c.(*connWrap.ConnUtil)
 	var conf struct {
 		Addr       string            `json:"addr"`
@@ -32,7 +32,7 @@ func (ptb330) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMap
 	var (
 		err     error
 		line    string
-		input   = []byte("SEND " + conf.Addr + "\r\n")
+		input   = []byte("SEND " + conf.Addr + "\r")
 		tmpData = make(map[string]*float64)
 	)
 	job := func() map[string]*float64 {

@@ -3,6 +3,7 @@ package controller
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/hashicorp/yamux"
 	"go.uber.org/zap"
 	"net/http"
 	"tide/pkg/custype"
@@ -50,6 +51,9 @@ func DelStation(c *gin.Context) {
 		logger.Error(err.Error())
 		return
 	} else if n > 0 {
+		if value, ok := recvConnections.Load(stationId); ok {
+			_ = value.(*yamux.Session).Close()
+		}
 		sendToConfigPubSub(kMsgDelUpstreamStation, stationId)
 	} //If there is no update, there is no need to publish
 	_, _ = c.Writer.Write([]byte("ok"))
@@ -160,7 +164,7 @@ func DataHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, ds)
 }
 
-//func bind(c *gin.Context, obj interface{}) bool {
+//func bind(c *gin.Context, obj any) bool {
 //	if errs := c.ShouldBind(obj); errs != nil {
 //		logger.Error(errs.Error())
 //		if errs, ok := errs.(validator.ValidationErrors); ok {

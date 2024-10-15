@@ -12,9 +12,11 @@ import (
 	"time"
 )
 
-//var (
+// var (
+//
 //	geo = ellipsoid.Init("WGS84", ellipsoid.Degrees, ellipsoid.Meter, true, true)
-//)
+//
+// )
 type (
 	gnssData struct {
 		sid  string
@@ -117,8 +119,8 @@ func gnssTcpServer() {
 					}
 				}
 
-				var wsMsg interface{}
-				dataPubSub.Range(func(ch, subs interface{}) bool {
+				var wsMsg any
+				dataPubSub.Range(func(ch, subs any) bool {
 					if _, ok := subs.(topicMap)[common.StationItemStruct{1, GNSSType}]; ok {
 						if wsMsg == nil {
 							wsMsg = struct {
@@ -128,7 +130,7 @@ func gnssTcpServer() {
 							}{gnssData.sid, gnssData.time.Unix(), gnssData.enu}
 						}
 						select {
-						case ch.(chan interface{}) <- wsMsg:
+						case ch.(chan any) <- wsMsg:
 						default:
 							log.Println("------------------------------ channel已满 ------------------------------")
 						}

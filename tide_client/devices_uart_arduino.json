@@ -1,23 +1,40 @@
 {
-	"port": "/dev/tty.usb-1.4",
-	"read_timeout": 2000,
-	"mode": {
-		"baud_rate": 9600,
-		"data_bits": 8,
-		"parity": 0
-	},
-	"model": "arduino",
-	"config": {
-		"sdi12": [],
-		"analog": [
-			{
-				"device_name": "地点1雨探测器",
-				"model": "DRD11A",
-				"pin": 14,
-				"cron": "@every 10s",
-				"item_name": "location1_rain_intensity",
-				"item_type": "rain_intensity"
-			}
-		]
-	}
+    "port": "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_9573535303235170C020-if00",
+    "read_timeout": 2000,
+    "mode": {
+        "baud_rate": 9600,
+        "data_bits": 8,
+        "parity": "None"
+    },
+    "model": "arduino",
+    "config": {
+        "sdi12": [
+            {
+                "model": "PLS-C",
+                "config": {
+                    "device_name": "地点1压力水位计",
+                    "extra_wake_time": 4,
+                    "addr": "1",
+                    "cron": "@every 40s",
+                    "items": {
+                        "water_level": "location1_water_level",
+                        "water_temperature": "location1_water_temperature",
+                        "water_conductivity": "location1_water_conductivity",
+                        "water_salinity": "location1_water_salinity",
+                        "water_total_dissolved_solids": "location1_water_total_dissolved_solids"
+                    }
+                }
+            }
+        ],
+        "analog": [
+            {
+                "device_name": "地点1雨探测器",
+                "model": "DRD11A",
+                "pin": 14,
+                "cron": "@every 10s",
+                "item_name": "location1_rain_intensity",
+                "item_type": "rain_intensity"
+            }
+        ]
+    }
 }

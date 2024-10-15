@@ -2,42 +2,87 @@ package uart
 
 import (
 	"errors"
-	"github.com/albenik/go-serial/v2"
+	"go.bug.st/serial"
+	"log"
+	"os"
+	"strings"
+	"sync/atomic"
 	"tide/tide_client/connWrap"
+	"time"
 )
 
+func getParity(parity string) serial.Parity {
+	parity = strings.ToLower(parity)
+	if p, ok := parityMap[parity]; ok {
+		return p
+	} else {
+		return serial.NoParity
+	}
+}
+
+var parityMap = map[string]serial.Parity{
+	"none":  serial.NoParity,
+	"odd":   serial.OddParity,
+	"even":  serial.EvenParity,
+	"mark":  serial.MarkParity,
+	"space": serial.SpaceParity,
+}
+
 type Mode struct {
-	BaudRate int           `json:"baud_rate"` // The serial port bitrate (aka Baud rate)
-	DataBits int           `json:"data_bits"` // Size of the character (must be 5, 6, 7 or 8)
-	Parity   serial.Parity `json:"parity"`    // Parity: N - None, E - Even, O - Odd
+	BaudRate int    `json:"baud_rate"` // The serial port bitrate (aka Baud rate)
+	DataBits int    `json:"data_bits"` // Size of the character (must be 5, 6, 7 or 8)
+	Parity   string `json:"parity"`    // Parity: None, Odd, Even, Mark, Space
 }
 
 type Uart struct {
-	Mode
+	mode        serial.Mode
 	portName    string
-	conn        *serial.Port
-	readTimeout uint32
+	conn        serial.Port
+	readTimeout time.Duration
+	inReconnect atomic.Bool
 }
 
-func NewUart(name string, readTimeout uint32, m Mode) (connWrap.ConnCommon, error) {
-	p := &Uart{portName: name, readTimeout: readTimeout, Mode: m}
-	err := p.open()
-	return p, err
+func NewUart(name string, readTimeout uint32, mode Mode) (connWrap.ConnCommon, error) {
+	c := &Uart{
+		portName:    name,
+		conn:        nil,
+		readTimeout: time.Duration(readTimeout) * time.Millisecond,
+		mode: serial.Mode{
+			BaudRate: mode.BaudRate,
+			DataBits: mode.DataBits,
+			Parity:   getParity(mode.Parity),
+			StopBits: serial.OneStopBit,
+		},
+	}
+	go c.reopenUntilSuccess()
+	return c, nil
 }
 
-func (c *Uart) open() error {
+func (c *Uart) reopenUntilSuccess() {
+	if !c.inReconnect.CompareAndSwap(false, true) {
+		// inReconnect == true
+		return
+	}
+	defer c.inReconnect.Store(false)
 	if c.conn != nil {
 		_ = c.conn.Close()
 	}
-	port, err := serial.Open(c.portName,
-		serial.WithBaudrate(c.BaudRate),
-		serial.WithParity(c.Parity),
-		serial.WithDataBits(c.DataBits),
-		serial.WithStopBits(serial.OneStopBit),
-		serial.WithHUPCL(true), // make sure to reset Arduino
-	)
+	var err error
+	for {
+		if err = c.open(); err != nil {
+			log.Printf("connect to %s failed: %s\n", c.portName, err)
+		} else {
+			log.Printf("connected to %s", c.portName)
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+}
+
+func (c *Uart) open() error {
+	port, err := serial.Open(c.portName, &c.mode)
 	if err == nil {
-		if err = port.SetFirstByteReadTimeout(c.readTimeout); err == nil {
+		if err = port.SetReadTimeout(c.readTimeout); err == nil {
 			c.conn = port
 		}
 	}
@@ -45,37 +90,36 @@ func (c *Uart) open() error {
 }
 
 func (c *Uart) Read(b []byte) (n int, err error) {
+	if c.conn == nil {
+		return 0, os.ErrInvalid
+	}
+	defer func() { c.handleErr(err) }()
 	n, err = c.conn.Read(b)
 	if n == 0 && err == nil {
 		return 0, connWrap.ErrTimeout
-	}
-	if err != nil {
-		if err2 := c.open(); err2 != nil {
-			err = errors.New(err.Error() + ". Reopen: " + err2.Error())
-		}
 	}
 	return n, err
 }
 
 func (c *Uart) Write(b []byte) (n int, err error) {
-	_ = c.ResetInputBuffer()
-	n, err = c.conn.Write(b)
-	if err != nil {
-		if err2 := c.open(); err2 != nil {
-			err = errors.New(err.Error() + ". Reopen: " + err2.Error())
-		}
+	if c.conn == nil {
+		return 0, os.ErrInvalid
 	}
-	return n, err
-}
-
-func (c *Uart) Close() error {
-	return c.conn.Close()
-}
-
-func (c *Uart) ReadyToRead() (uint32, error) {
-	return c.conn.ReadyToRead()
+	defer func() { c.handleErr(err) }()
+	return c.conn.Write(b)
 }
 
 func (c *Uart) ResetInputBuffer() (err error) {
+	if c.conn == nil {
+		return os.ErrInvalid
+	}
+	defer func() { c.handleErr(err) }()
 	return c.conn.ResetInputBuffer()
+}
+
+func (c *Uart) handleErr(err error) {
+	if err == nil || errors.Is(err, connWrap.ErrTimeout) {
+		return
+	}
+	go c.reopenUntilSuccess()
 }

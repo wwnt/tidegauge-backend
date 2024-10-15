@@ -36,10 +36,11 @@ void loop()
 	sdiAvail = mySDI12.available();
 	if (sdiAvail > 0)
 	{
-		for (int i = 0; i < sdiAvail; i++)
+		while (mySDI12.available())
 		{
 			sdiInByte = mySDI12.read();
 			sdiMsgStr += sdiInByte;
+			delay(10); // 1 character ~ 7.5ms
 		}
 	}
 	else if (sdiAvail == 0)
@@ -54,7 +55,6 @@ void loop()
 			// -- READ SERIAL DATA --
 			// If serial data is available, read in a single byte and add it to
 			// a String on each iteration
-
 			serialInByte = Serial.read();
 			if (serialInByte == '\xFF') // 8 data bits is required
 			{

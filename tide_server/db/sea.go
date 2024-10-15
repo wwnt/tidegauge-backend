@@ -5,7 +5,7 @@ import (
 	"tide/common"
 )
 
-func GetSeaLevel() (interface{}, error) {
+func GetSeaLevel() (any, error) {
 	rows, err := TideDB.Query("select code, lat, lon, level from station_sea_level")
 	if err != nil {
 		return nil, err
@@ -66,11 +66,11 @@ type SateAltimetry struct {
 	SeaLevel float64 `json:"seaLevel"`
 }
 
-func GetSateAltimetry(tn string) (interface{}, error) {
+func GetSateAltimetry(tn string) (any, error) {
 	if common.ContainsIllegalCharacter(tn) {
 		return nil, errors.New("Table name contains illegal characters: " + tn)
 	}
-	rows, err := seaDB.Query(`select lat, lon, sealevel from "` + tn + `"`)
+	rows, err := seaDB.Query(`select` + ` lat, lon, sealevel from "` + tn + `"`)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ type Gloss struct {
 	PSMSLNumber *int    `json:"PSMSL number"`
 }
 
-func GetGlossData() (interface{}, error) {
+func GetGlossData() (any, error) {
 	rows, err := TideDB.Query(`SELECT id, name, sga.country, latitude, longitude, latest_psmsl, latest_psmsl_rlr, latest_bodc, latest_sonel, latest_jasl, latest_uhslc_fast, latest_vliz, ioc_code, psmsl_number
 FROM station_info_gloss_all sga left join station_info_gloss on sga.name = station_info_gloss.station`)
 	if err != nil {
@@ -169,7 +169,7 @@ type SonelData struct {
 	StaLat  *float64 `json:"sta_lat"`
 }
 
-func GetSonelData() (interface{}, error) {
+func GetSonelData() (any, error) {
 	rows, err := TideDB.Query(`select sta_id, sta_name, sta_acro, sta_type, sta_etat, sta_pays, sta_lon, sta_lat from station_info_tide`)
 	if err != nil {
 		return nil, err
@@ -203,7 +203,7 @@ type PsmslData struct {
 	Date        *string  `json:"Date"`
 }
 
-func GetPsmslData() (interface{}, error) {
+func GetPsmslData() (any, error) {
 	rows, err := TideDB.Query(`select station_name, id, lat, lon, gloss_id, country, date, coastline, station from station_info_psmsl`)
 	if err != nil {
 		return nil, err

@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-// connections with upstream or tide gauge. Used to get data
-var connections sync.Map
+// recvConnections is connections with upstream or tide gauge. Used to get data.
+var recvConnections sync.Map
 
 type upstreamStorage struct {
 	config     db.Upstream
@@ -31,7 +31,7 @@ func startSync(upstreamConfig db.Upstream) {
 		ctx:        ctx,
 		cancelF:    cancel,
 	}
-	connections.Store(upstreamConfig.Id, upstream) // store first
+	recvConnections.Store(upstreamConfig.Id, upstream) // store first
 
 	fetchUpstreamLoop(upstream)
 }
@@ -48,11 +48,12 @@ func fetchUpstreamLoop(upstream *upstreamStorage) {
 }
 
 func dialUpstream(upstream *upstreamStorage) {
-	req, err := http.NewRequestWithContext(upstream.ctx, http.MethodPost, upstream.config.Sync, nil)
+	req, err := http.NewRequestWithContext(upstream.ctx, http.MethodPost, upstream.config.Url+syncPath, nil)
 	if err != nil {
 		logger.Error(err.Error())
 		return
 	}
+	// net/http/response.go: func isProtocolSwitchResponse()
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 
@@ -69,7 +70,7 @@ func dialUpstream(upstream *upstreamStorage) {
 		logger.Debug(http.StatusText(http.StatusUnauthorized))
 		return
 	}
-	logger.Debug("sync client", zap.String("url", upstream.config.Sync))
+	logger.Debug("sync client", zap.String("url", upstream.config.Url))
 
 	conn, ok := resp.Body.(io.ReadWriteCloser)
 	if !ok {
@@ -86,10 +87,10 @@ func handleSyncClientConn(conn io.ReadWriteCloser, upstream *upstreamStorage) {
 		return
 	}
 	defer func() {
-		logger.Debug("sync client closed", zap.String("url", upstream.config.Sync))
+		logger.Debug("sync client closed", zap.String("url", upstream.config.Url))
 		_ = session.Close()
-
-		if err = db.RemoveAllAvailable(upstream.config.Id); err != nil {
+		// when the connection is closed, the upstream will be removed from the map
+		if err = db.RemoveAvailableByUpstreamId(upstream.config.Id); err != nil {
 			logger.Error(err.Error())
 		}
 	}()
@@ -144,7 +145,7 @@ type tokenSrc struct {
 func (ts *tokenSrc) Token() (*oauth2.Token, error) {
 	oauth2Config := &oauth2.Config{
 		Endpoint: oauth2.Endpoint{
-			TokenURL: ts.Login,
+			TokenURL: ts.Url + loginPath,
 		},
 	}
 	return oauth2Config.PasswordCredentialsToken(ts.ctx, ts.Username, ts.Password)
