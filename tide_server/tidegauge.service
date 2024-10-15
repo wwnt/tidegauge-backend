@@ -5,11 +5,11 @@ After=network.target
 
 [Service]
 RestartSec=5s
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/tidegauge-backend/
+User=YOUR OWN USER
+Group=YOUR OWN GROUP
+WorkingDirectory=/***YOUR OWN DIRECTORY**/
 
-ExecStart=/home/pi/tidegauge-backend/tide_client
+ExecStart=/**YOUR OWN DIRECTORY**/tide_server
 Restart=on-failure
 
 [Install]

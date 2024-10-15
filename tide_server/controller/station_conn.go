@@ -2,17 +2,15 @@ package controller
 
 import (
 	"encoding/json"
+	"github.com/google/uuid"
+	"github.com/hashicorp/yamux"
+	"go.uber.org/zap"
 	"io"
-	"log"
 	"net"
 	"strings"
 	"tide/common"
 	"tide/tide_server/db"
 	"tide/tide_server/global"
-
-	"github.com/google/uuid"
-	"github.com/hashicorp/yamux"
-	"go.uber.org/zap"
 )
 
 func tideDataReceiver() {
@@ -118,7 +116,6 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 			}
 			break
 		}
-		log.Println(msg.Type, string(msg.Body))
 		switch msg.Type {
 		case common.MsgData:
 			var body common.ItemNameDataTimeStruct
