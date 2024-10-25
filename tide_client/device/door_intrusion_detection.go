@@ -13,12 +13,12 @@ import (
 )
 
 func init() {
-	RegisterDevice("DRD11A", &dRD11A{})
+	RegisterDevice("DoorIntrusionDetection", &doorIntrusionDetection{})
 }
 
-type dRD11A struct{}
+type doorIntrusionDetection struct{}
 
-func (dRD11A) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
+func (doorIntrusionDetection) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 	gpio := conn.(*gpiocdev.Chip)
 	var conf struct {
 		DeviceName string `json:"device_name"`
@@ -26,23 +26,23 @@ func (dRD11A) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 		ItemName   string `json:"item_name"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
-	var rain, notRain float64 = 1, 0
+	var doorOpen, doorClose float64 = 1, 0
 
-	ll, err := gpio.RequestLines([]int{conf.Pin}, gpiocdev.WithPullUp, gpiocdev.WithBothEdges,
+	ll, err := gpio.RequestLines([]int{conf.Pin}, gpiocdev.WithPullDown, gpiocdev.WithBothEdges,
 		gpiocdev.WithDebounce(time.Millisecond*10),
 		gpiocdev.WithEventHandler(func(evt gpiocdev.LineEvent) {
 			if evt.Type == gpiocdev.LineEventRisingEdge {
-				DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &notRain}}
+				DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &doorOpen}}
 			}
-			DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &rain}}
+			DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &doorClose}}
 		}))
 	if err != nil {
 		if errors.Is(err, syscall.Errno(22)) {
-			global.Log.Error("Note that the WithPullUp option requires kernel V5.5 or later - check your kernel version.")
+			global.Log.Error("Note that the WithPullDown option requires kernel V5.5 or later - check your kernel version.")
 		}
 		global.Log.Fatalf("RequestLine returned error: %s\n", err)
 	}
 	global.Log.Debugf("watch on gpio pin: %v", conf.Pin)
 	project.RegisterReleaseFunc(func() { _ = ll.Close() })
-	return common.StringMapMap{conf.DeviceName: map[string]string{"precipitation_detection": conf.ItemName}}
+	return common.StringMapMap{conf.DeviceName: map[string]string{"switch_state": conf.ItemName}}
 }

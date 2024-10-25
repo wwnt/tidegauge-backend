@@ -10,19 +10,19 @@
 - Sdi-12
 - Read Analog Voltage
 
-# 2. How to use
+# 3. How to use
 
 0xFF is used to separate.
 
 The sdi-12 command should be followed by one byte of extraWakeTime for the second parameter of `sendCommand`.
 (Check out the documentation here https://envirodiy.github.io/Arduino-SDI-12/class_s_d_i12.html)
 
-## 2.1 Examples
+## 3.1 Examples
 
-### 2.1.1. Send sdi-12 command: ?!
+### 3.1.1. Send sdi-12 command: ?!
 
     3F 21 00 FF
 
-### 2.1.2. Read A0 pin voltage.
+### 3.1.2. Read A0 pin voltage.
 
     0E FF

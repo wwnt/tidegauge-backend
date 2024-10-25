@@ -16,6 +16,22 @@
                 "pin": 5,
                 "item_name": "location1_precipitation_detection"
             }
+        },
+        {
+            "model": "DoorIntrusionDetection",
+            "config": {
+                "device_name": "door1",
+                "pin": 19,
+                "item_name": "door1_switch_status"
+            }
+        },
+        {
+            "model": "DoorIntrusionDetection",
+            "config": {
+                "device_name": "door2",
+                "pin": 21,
+                "item_name": "door2_switch_status"
+            }
         }
     ]
 }
