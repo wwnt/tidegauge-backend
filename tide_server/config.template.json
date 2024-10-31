@@ -3,15 +3,15 @@
     "tide": {
         "listen": ":7102",
         "camera": {
-            "storage": "",
+            "storage": "E:/tide/cameras/",
             "latest_snapshot_count": 9
         },
-        "data_delay": 60
+        "data_delay_sec": 60
     },
     "smtp": {
-        "host": "",
+        "host": "smtp.mail.com",
         "port": 587,
-        "username": "",
+        "username": "user1",
         "password": "123456"
     },
     "keycloak": {
@@ -20,7 +20,7 @@
         "master_password": "admin123!",
         "realm": "tgm",
         "client_id": "tgm-client",
-        "client_secret": ""
+        "client_secret": "!!!secret!!!"
     },
     "db": {
         "tide": {

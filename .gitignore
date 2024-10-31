@@ -26,3 +26,7 @@
 /uart-tcp-forward/uart-tcp-forward
 
 _*
+
+*.docx
+*.drawio
+*.bak
