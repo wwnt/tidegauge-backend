@@ -32,6 +32,7 @@ func GetItems(stationId uuid.UUID) ([]Item, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		i     Item
 		items []Item
@@ -114,6 +115,8 @@ func GetAvailableItems() ([]common.StationItemStruct, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
+
 	ss, err := scanStationItem(rows)
 	if err != nil {
 		return nil, err
@@ -152,6 +155,7 @@ station_id in (select station_id from upstream_stations where upstream_id=$2)`, 
 	if err != nil {
 		return n, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		s   common.StationItemStruct
 		old = make(map[common.StationItemStruct]struct{})

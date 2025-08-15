@@ -16,12 +16,19 @@
 		]
 	},
 	"db": {
-		"dsn": "file:data.db?cache=shared"
+		"dsn": "file:data.db?cache=shared",
+		"hold_days": 10
+	},
+	"gnss": {
+		"ftp": {
+			"path": "/home/pi/tide_gnss",
+			"hold_days": 3
+		}
 	},
 	"cameras": {
 		"ftp": {
 			"path": "/home/pi/cameras",
-			"hold_days": 10
+			"hold_days": 3
 		},
 		"list": {
 			"camera1": {

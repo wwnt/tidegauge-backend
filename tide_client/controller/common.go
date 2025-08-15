@@ -44,10 +44,11 @@ func Init() {
 	project.RegisterReleaseFunc(db.Close)
 	stationInfo.Identifier = global.Config.Identifier
 
+	scheduleRemoveOutdatedData()
+
 	addDevices()
 	go receiveData(dataPubSub)
 
-	scheduleRemoveCameraOutdated()
 	addRpiStatus(dataPubSub)
 
 	for name := range global.Config.Cameras.List {

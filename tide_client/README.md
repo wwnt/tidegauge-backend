@@ -41,7 +41,7 @@
 ## 2.1. Ftp Server
 
 1. `sudo apt install vsftpd`
-2. `sudoedit /etc/vsftpd.conf`, set `write_enable=YES`
+2. `sudoedit /etc/vsftpd.conf`, set `write_enable=YES` `local_umask=022`
 3. Setting monitor camera's ftp config
 
 ## 2.2. Syncthing

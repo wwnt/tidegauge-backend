@@ -20,9 +20,10 @@ func Must2(_ any, err error) {
 
 func Printable(str []byte) []byte {
 	return bytes.Map(func(r rune) rune {
-		if unicode.IsPrint(r) { // unicode.IsSpace(r)
+		if unicode.IsPrint(r) {
 			return r
+		} else {
+			return '^'
 		}
-		return -1
 	}, str)
 }

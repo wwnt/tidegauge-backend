@@ -37,6 +37,7 @@ func GetStations() ([]Station, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		s  Station
 		ss []Station

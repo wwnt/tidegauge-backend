@@ -32,6 +32,7 @@ func (p *PG) GetPermissions(username string) (map[uuid.UUID][]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		stationId uuid.UUID
 		itemName  string
@@ -90,6 +91,7 @@ func (p *PG) GetCameraStatusPermissions(username string) (map[uuid.UUID][]string
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		stationId  uuid.UUID
 		cameraName string

@@ -51,7 +51,6 @@ After=network.target
 [Service]
 RestartSec=5s
 User=pi
-Group=pi
 WorkingDirectory=/home/pi/tide
 
 ExecStart=/home/pi/tide/uart-tcp-forward -l :7000 -s /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AK06YNFW-if00-port0

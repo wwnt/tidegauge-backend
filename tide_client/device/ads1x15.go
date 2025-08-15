@@ -2,13 +2,12 @@ package device
 
 import (
 	"encoding/json"
-	"tide/common"
-	"tide/pkg"
-	"tide/tide_client/global"
-
 	"periph.io/x/conn/v3/i2c"
 	"periph.io/x/conn/v3/physic"
 	"periph.io/x/devices/v3/ads1x15"
+	"tide/common"
+	"tide/pkg"
+	"tide/tide_client/global"
 )
 
 func init() {
@@ -41,15 +40,15 @@ func (ads1115) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap 
 		if err != nil {
 			global.Log.Fatal(err)
 		}
-		var ch_m float64 = item.ChM
-		var ch_b float64 = item.ChB
+		var chM = item.ChM
+		var chB = item.ChB
 		var job = func() *float64 {
 			sample, err := pin.Read()
 			if err != nil {
 				global.Log.Error(err)
 				return nil
 			} else {
-				var f = (float64(sample.V)/float64(physic.Volt))*ch_m + ch_b
+				var f = (float64(sample.V)/float64(physic.Volt))*chM + chB
 				return &f
 			}
 		}

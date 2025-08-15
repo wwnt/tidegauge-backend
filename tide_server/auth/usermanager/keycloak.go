@@ -101,6 +101,7 @@ func (k *Keycloak) ListUsers(condition int, role int) (users []auth.User, err er
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var user auth.User
 	for rows.Next() {
 		err = rows.Scan(&user.Username, &user.Role, &user.Email, &user.LiveCamera)

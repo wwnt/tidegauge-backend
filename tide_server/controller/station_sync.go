@@ -5,12 +5,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
 	"go.uber.org/zap"
-	"io"
 	"net"
 	"strings"
 	"tide/common"
 	"tide/tide_server/db"
 	"tide/tide_server/global"
+	"time"
 )
 
 func tideDataReceiver() {
@@ -38,10 +38,10 @@ func handleStationConn(conn net.Conn) {
 		_ = conn.Close()
 		logger.Info("station conn closed", zap.String("remote", conn.RemoteAddr().String()))
 	}()
-
-	muxConfig := yamux.DefaultConfig()
-	muxConfig.LogOutput = io.Discard
-	session, err := yamux.Server(conn, muxConfig)
+	cnf := yamux.DefaultConfig()
+	cnf.KeepAliveInterval = 100 * time.Second
+	cnf.ConnectionWriteTimeout = 30 * time.Second
+	session, err := yamux.Server(conn, cnf)
 	if err != nil {
 		return
 	}
@@ -51,7 +51,7 @@ func handleStationConn(conn net.Conn) {
 	if err != nil {
 		return
 	}
-
+	defer func() { _ = stream.Close() }()
 	handleStationConnStream1(stream, session)
 }
 

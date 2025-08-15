@@ -7,7 +7,7 @@
             "model": "VEGAPULS61",
             "config": {
                 "device_name": "地点1雷达液位计",
-                "cron": "@every 20s",
+                "cron": "@every 1m",
                 "addr": 246,
                 "item_name": "location1_radar_water_distance"
             }

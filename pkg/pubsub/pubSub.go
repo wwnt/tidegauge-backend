@@ -11,13 +11,16 @@ import (
 type BytesChan = chan []byte
 type Subscriber = BytesChan
 
+// TopicMap holds a set of topics
 type TopicMap map[any]struct{}
 
 type PubSub struct {
-	subscribers  sync.Map
+	mutex        sync.Mutex
+	subscribers  map[Subscriber]TopicMap
 	writeTimeout time.Duration
 }
 
+// NewSubscriber creates a new subscriber. When the closeChan signal is received, it closes the connection.
 func NewSubscriber(closeChan <-chan struct{}, conn io.WriteCloser) Subscriber {
 	ch := make(BytesChan, 10)
 	go func() {
@@ -28,8 +31,7 @@ func NewSubscriber(closeChan <-chan struct{}, conn io.WriteCloser) Subscriber {
 		)
 		for {
 			select {
-			// For incoming server requests, the context is canceled when the client's connection closes,
-			// the request is canceled (with HTTP/2), or when the ServeHTTP method returns.
+			// Exit when connection is closed or when the close signal is received.
 			case <-closeChan:
 				return
 			case bytes = <-ch:
@@ -47,73 +49,98 @@ func NewSubscriber(closeChan <-chan struct{}, conn io.WriteCloser) Subscriber {
 }
 
 func NewPubSub() *PubSub {
-	p := new(PubSub)
-	p.writeTimeout = time.Second
-	return p
+	return &PubSub{
+		subscribers:  make(map[Subscriber]TopicMap),
+		writeTimeout: time.Second,
+	}
 }
 
-// SubscribeTopic add or modify subscriber
+// SubscribeTopic adds or modifies a subscriber and their subscribed topics
 func (p *PubSub) SubscribeTopic(subscriber Subscriber, topics TopicMap) {
-	p.subscribers.Store(subscriber, topics)
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.subscribers[subscriber] = topics
 }
 
+// LimitTopicScope limits the scope of topics for a specific subscriber
 func (p *PubSub) LimitTopicScope(subscriber Subscriber, scope TopicMap) {
 	if scope == nil {
 		return
 	}
-	oldTopics, ok := p.subscribers.LoadAndDelete(subscriber)
+	p.mutex.Lock()
+	oldTopics, ok := p.subscribers[subscriber]
 	if !ok {
+		p.mutex.Unlock()
 		return
 	}
-	var newTopics = make(TopicMap)
-	for key := range oldTopics.(TopicMap) {
+	// Remove the subscriber from the map first
+	delete(p.subscribers, subscriber)
+	p.mutex.Unlock()
+
+	// Calculate the new topic intersection
+	newTopics := make(TopicMap)
+	for key := range oldTopics {
 		if _, ok := scope[key]; ok {
 			newTopics[key] = struct{}{}
 		}
 	}
+
 	if len(newTopics) > 0 {
-		p.subscribers.LoadOrStore(subscriber, newTopics)
+		p.mutex.Lock()
+		p.subscribers[subscriber] = newTopics
+		p.mutex.Unlock()
 	}
 }
 
-// Evict delete the subscriber
+// Evict deletes a subscriber
 func (p *PubSub) Evict(subscriber Subscriber) {
-	p.subscribers.Delete(subscriber)
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	delete(p.subscribers, subscriber)
 }
 
-// EvictAndClose delete the subscriber and close the subscriber
+// EvictAndClose deletes a subscriber and closes the subscriber's channel to notify it to exit
 func (p *PubSub) EvictAndClose(subscriber Subscriber) {
-	if _, loaded := p.subscribers.LoadAndDelete(subscriber); loaded {
-		subscriber <- nil // make the subscriber exit the loop
-	}
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.evictAndClose(subscriber)
+}
+func (p *PubSub) evictAndClose(subscriber Subscriber) {
+	delete(p.subscribers, subscriber)
+	close(subscriber)
 }
 
-// Publish data to the subscribers that subscribed to the topic. If topic is nil, it will be sent to all subscribers.
+// Publish sends data to subscribers. If a topic is specified, the message is only sent to subscribers who are subscribed to that topic.
+// If sending fails, the corresponding subscriber will be deleted and closed.
 func (p *PubSub) Publish(data any, topic any) (err error) {
 	var mb []byte
-	p.subscribers.Range(func(key, value any) bool {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	for subscriber, topics := range p.subscribers {
+		// If a specific topic is passed, only send to subscribers subscribed to that topic
 		if topic != nil {
-			if topics := value.(TopicMap); topics != nil { // make sure topics not nil
+			if topics != nil {
 				if _, ok := topics[topic]; !ok {
-					return true
+					continue
 				}
 			}
 		}
+		// Serialize data the first time it is sent
 		if mb == nil {
-			if mb, err = json.Marshal(data); err != nil {
-				return false
+			mb, err = json.Marshal(data)
+			if err != nil {
+				return err
 			}
 		}
-		subscriber := key.(Subscriber)
-		// If there is a write error, delete it from subscribers and close the subscriber to avoid sending to this subscriber in the next cycle
+		// Non-blocking send, if the channel is blocked, evict and close the subscriber
 		select {
 		case subscriber <- mb:
 		default:
-			p.EvictAndClose(subscriber)
+			p.evictAndClose(subscriber)
 		}
-		return true
-	})
-	return err
+	}
+	return nil
 }
 
 type delayPubEntry struct {

@@ -57,7 +57,6 @@ func (wmt700) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		} else {
 			ws = &f
 		}
-
 		val = strings.TrimSpace(getStringInBetween(line, ",", "\r"))
 		if val == "" {
 			global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Received: []byte(line), Err: err})

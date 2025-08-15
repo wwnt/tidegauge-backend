@@ -27,7 +27,9 @@ type Error struct {
 
 func (e *Error) Error() string {
 	var ret string
-	ret = e.Err.Error()
+	if e.Err != nil {
+		ret = e.Err.Error()
+	}
 	if e.Send != nil {
 		ret += fmt.Sprintf(", Send: [% X]%s", e.Send, pkg.Printable(e.Send))
 	}

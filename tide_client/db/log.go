@@ -15,6 +15,7 @@ where ROWID in (select max(ROWID) from item_status_log group by item_name)`)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		d  common.ItemStatusStruct
 		ds []common.ItemStatusStruct
@@ -37,6 +38,7 @@ func GetItemStatusLogAfter(after int64) ([]common.RowIdItemStatusStruct, error) 
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		d  common.RowIdItemStatusStruct
 		ds []common.RowIdItemStatusStruct

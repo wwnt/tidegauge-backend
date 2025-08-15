@@ -1,11 +1,6 @@
 package controller
 
 import (
-	"context"
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -122,27 +117,4 @@ truncate table rpi_status_log restart identity cascade;
 drop table if exists item1 cascade;
 `)
 	require.NoError(t, err)
-}
-
-func _(ctx context.Context) {
-	dockerCli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	resp, err := dockerCli.ContainerCreate(ctx,
-		&container.Config{
-			Image: "quay.io/keycloak/keycloak",
-		},
-		&container.HostConfig{},
-		&network.NetworkingConfig{},
-		nil,
-		"",
-	)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if err = dockerCli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
-		log.Fatal(err)
-	}
 }

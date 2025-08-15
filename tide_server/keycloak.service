@@ -1,12 +1,12 @@
 [Unit]
-Description=Tide Gauge Service
+Description=Keycloak Service
 After=network.target
 
 [Service]
 User=YOUR OWN USER
-WorkingDirectory=/***YOUR OWN DIRECTORY**/
+WorkingDirectory=/***Keycloak Directory**/
 
-ExecStart=/**YOUR OWN DIRECTORY**/tide_server
+ExecStart=/**Keycloak Directory**/bin/kc.sh start-dev
 
 Restart=on-failure
 RestartSec=5s

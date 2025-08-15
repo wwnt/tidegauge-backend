@@ -11,6 +11,7 @@ import (
 	"tide/tide_client/device"
 	"tide/tide_client/device/camera"
 	"tide/tide_client/global"
+	"time"
 )
 
 var stationInfo = common.StationInfoStruct{
@@ -29,6 +30,9 @@ func client(dataSub *pubsub.PubSub) {
 }
 
 func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
+	cnf := yamux.DefaultConfig()
+	cnf.EnableKeepAlive = false
+	cnf.ConnectionWriteTimeout = 30 * time.Second
 	session, err := yamux.Client(conn, nil)
 	if err != nil {
 		global.Log.Error(err)
@@ -40,7 +44,7 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 		global.Log.Error(err)
 		return
 	}
-
+	defer func() { _ = stream1.Close() }()
 	var (
 		encoder = json.NewEncoder(stream1)
 		decoder = json.NewDecoder(stream1)
@@ -85,6 +89,7 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 		// send missData
 		if err = encoder.Encode(missData); err != nil {
 			global.Log.Error(err)
+			dataReceiveMu.Unlock()
 			return
 		}
 
@@ -97,6 +102,7 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 		// send missStatusLogs
 		if err = encoder.Encode(missStatusLogs); err != nil {
 			global.Log.Error(err)
+			dataReceiveMu.Unlock()
 			return
 		}
 	}
@@ -148,7 +154,7 @@ func portTerminal(conn net.Conn) {
 		global.Log.Debug(msg)
 		deviceConn, ok := device.DevicesUartConn[msg.DeviceName]
 		if !ok {
-			dataReceiveMu.Unlock()
+			//dataReceiveMu.Unlock()
 			return
 		}
 		// Exclusive access to this connection

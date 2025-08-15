@@ -3,13 +3,13 @@ Description=Uart Tcp Forward Service
 After=network.target
 
 [Service]
-RestartSec=5s
 User=pi
-Group=pi
 WorkingDirectory=/home/pi/tide
 
 ExecStart=/home/pi/tide/uart-tcp-forward
+
 Restart=on-failure
+RestartSec=5s
 
 [Install]
 WantedBy=multi-user.target
