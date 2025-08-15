@@ -60,6 +60,7 @@ func GetDataHistory(stationId uuid.UUID, itemName string, start, end custype.Tim
 		if err != nil {
 			return ds, err
 		}
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			err = rows.Scan(&d.Millisecond, &d.Value)
 			if err != nil {

@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+type Ftp struct {
+	Path     string        `json:"path"`
+	HoldDays time.Duration `json:"hold_days"`
+}
+
 var Config struct {
 	LogLevel   string              `json:"log_level"`
 	Listen     string              `json:"listen"`
@@ -16,13 +21,14 @@ var Config struct {
 	Identifier string              `json:"identifier"`
 	Devices    map[string][]string `json:"devices"`
 	Db         struct {
-		Dsn string `json:"dsn"`
+		Dsn      string        `json:"dsn"`
+		HoldDays time.Duration `json:"hold_days"`
 	} `json:"db"`
+	Gnss struct {
+		Ftp Ftp `json:"ftp"`
+	} `json:"gnss"`
 	Cameras struct {
-		Ftp struct {
-			Path     string        `json:"path"`
-			HoldDays time.Duration `json:"hold_days"`
-		} `json:"ftp"`
+		Ftp  Ftp `json:"ftp"`
 		List map[string]struct {
 			Snapshot string `json:"snapshot"`
 			Username string `json:"username"`

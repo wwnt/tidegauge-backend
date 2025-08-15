@@ -22,6 +22,7 @@ func GetDataHistory(itemName string, start, end int64) ([]common.DataTimeStruct,
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		d  common.DataTimeStruct
 		ds []common.DataTimeStruct

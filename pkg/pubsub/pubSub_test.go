@@ -18,7 +18,7 @@ func TestPubSub_Evict(t *testing.T) {
 	subscriber := NewSubscriber(nil, conn1)
 	p.SubscribeTopic(subscriber, TopicMap{key: struct{}{}})
 	p.Evict(subscriber)
-	_, ok := p.subscribers.Load(conn1)
+	_, ok := p.subscribers[subscriber]
 	assert.False(t, ok)
 }
 
@@ -31,7 +31,7 @@ func TestPubSub_EvictAndClose(t *testing.T) {
 	subscriber := NewSubscriber(nil, conn1)
 	p.SubscribeTopic(subscriber, TopicMap{key: struct{}{}})
 	p.EvictAndClose(subscriber)
-	_, ok := p.subscribers.Load(conn1)
+	_, ok := p.subscribers[subscriber]
 	assert.False(t, ok)
 	_, err := conn1.Write([]byte{0})
 	assert.ErrorIs(t, err, io.ErrClosedPipe)
@@ -50,7 +50,7 @@ func TestPubSub_LimitTopicScope(t *testing.T) {
 				p := NewPubSub()
 				p.SubscribeTopic(subscriber, TopicMap{"1": struct{}{}, "2": struct{}{}})
 				p.LimitTopicScope(subscriber, TopicMap{"3": struct{}{}, "2": struct{}{}})
-				val, ok := p.subscribers.Load(conn1)
+				val, ok := p.subscribers[subscriber]
 				assert.True(t, ok)
 				assert.Equal(t, TopicMap{"2": struct{}{}}, val)
 			},
@@ -111,6 +111,6 @@ func TestPubSub_SubscribeTopic(t *testing.T) {
 	)
 	subscriber := NewSubscriber(nil, conn1)
 	p.SubscribeTopic(subscriber, TopicMap{key: struct{}{}})
-	_, ok := p.subscribers.Load(conn1)
+	_, ok := p.subscribers[subscriber]
 	assert.True(t, ok)
 }

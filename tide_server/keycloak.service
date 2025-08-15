@@ -1,0 +1,15 @@
+[Unit]
+Description=Keycloak Service
+After=network.target
+
+[Service]
+User=YOUR OWN USER
+WorkingDirectory=/***Keycloak Directory**/
+
+ExecStart=/**Keycloak Directory**/bin/kc.sh start-dev
+
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

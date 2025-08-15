@@ -14,6 +14,7 @@ func GetUpstreams() ([]Upstream, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		u  Upstream
 		us []Upstream
@@ -62,6 +63,7 @@ func DelUpstream(id int) ([]uuid.UUID, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		d  uuid.UUID
 		ds []uuid.UUID
@@ -89,6 +91,7 @@ inner join upstream_stations on stations.id = upstream_stations.station_id where
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		s  Station
 		ss []Station
@@ -116,6 +119,7 @@ func GetUpstreamsByStationId(stationId uuid.UUID) ([]Upstream, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		u  Upstream
 		us []Upstream

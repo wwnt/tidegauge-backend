@@ -39,6 +39,7 @@ func GetDevices(stationId uuid.UUID) ([]Device, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		d  Device
 		ds []Device
@@ -92,6 +93,7 @@ where station_id in (select id from stations where deleted_at is null)`)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		dr  DeviceRecord
 		drs []DeviceRecord

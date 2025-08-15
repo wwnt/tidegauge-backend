@@ -10,6 +10,7 @@ func GetSeaLevel() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 
 	type seaLevel struct {
 		Code  string     `json:"name"`
@@ -74,6 +75,7 @@ func GetSateAltimetry(tn string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		s  SateAltimetry
 		ss []SateAltimetry
@@ -117,6 +119,7 @@ FROM station_info_gloss_all sga left join station_info_gloss on sga.name = stati
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	type glossData struct {
 		Gloss
 		GlossStation
@@ -174,6 +177,7 @@ func GetSonelData() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		d  SonelData
 		ds []SonelData
@@ -208,6 +212,7 @@ func GetPsmslData() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		d  PsmslData
 		ds []PsmslData

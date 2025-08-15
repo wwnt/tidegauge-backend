@@ -86,7 +86,7 @@ var (
 
 func InitData(t *testing.T) {
 	_, err := db.Exec(`
-delete from item_status_log;
+delete from item_status_log where true;
 drop table if exists item1;
 drop table if exists item2;
 `)

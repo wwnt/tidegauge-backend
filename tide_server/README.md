@@ -13,12 +13,29 @@
 
 - Postgresql
 - Syncthing
+- Keycloak
 
-# 2. Install Syncthing
+# 2. Install third party
+
+## 2.1. Postgresql
+
+Following https://www.postgresql.org/download/
+
+## 2.2. Keycloak
+
+Following https://www.keycloak.org/guides#getting-started
+
+Edit `conf/keycloak.conf` to use postgresql as database.
+
+Create a realm named `tidegauge` and a client named `myclient`.
+
+Disable some required actions:
+
+![keycloak_actions](../resources/keycloak_actions.jpg)
+
+## 2.3. Syncthing
 
 Following https://docs.syncthing.net/users/autostart.html
-
-or https://github.com/syncthing/syncthing/blob/main/README-Docker.md
 
 # 3. Init postgresql database
 

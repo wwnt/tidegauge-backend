@@ -27,12 +27,12 @@ type pcf8583 struct{}
 func (pcf8583) NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap {
 	bus := conn.(i2c.Bus)
 	var conf struct {
-		Addr       uint16 `json:"addr"` //0xA0 convert to decimal .. 160
-		DeviceName string `json:"device_name"`
-		Model      string `json:"model"`
-		Cron       string `json:"cron"`
-		ItemName   string `json:"item_name"`
-		ResetC     bool   `json:"reset_c"`
+		Addr       uint16  `json:"addr"` //0xA0 convert to decimal .. 160
+		DeviceName string  `json:"device_name"`
+		Cron       string  `json:"cron"`
+		ItemName   string  `json:"item_name"`
+		Resolution float64 `json:"resolution"`
+		ResetC     bool    `json:"reset_c"`
 	}
 
 	pkg.Must(json.Unmarshal(rawConf, &conf))
@@ -40,7 +40,7 @@ func (pcf8583) NewDevice(conn interface{}, rawConf json.RawMessage) common.Strin
 	setMode(d, mode_event_counter)
 	log.Printf("PCF8583 Mode 0x%X", uint8(getMode(d)))
 	var job = func() *float64 {
-		var value float64 = float64(getCount(d))
+		var value float64 = float64(getCount(d)) * conf.Resolution
 		if conf.ResetC {
 			setCount(d, 0)
 		}

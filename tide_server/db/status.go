@@ -72,10 +72,11 @@ func PagedItemStatusLogs(pageNum, pageSize uint) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := TideDB.Query("select station_id, item_name, status, changed_at from item_status_log limit $1 offset $2", pageSize, (pageNum-1)*pageSize)
+	rows, err := TideDB.Query("select station_id, item_name, status, changed_at from item_status_log order by changed_at desc limit $1 offset $2", pageSize, (pageNum-1)*pageSize)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var d common.StationIdItemStatusStruct
 	for rows.Next() {
 		err = rows.Scan(&d.StationId, &d.ItemName, &d.Status, &d.ChangedAt)
@@ -92,6 +93,7 @@ func GetItemStatusLogs(stationId uuid.UUID, after int64) ([]common.RowIdItemStat
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	var (
 		h  common.RowIdItemStatusStruct
 		hs []common.RowIdItemStatusStruct

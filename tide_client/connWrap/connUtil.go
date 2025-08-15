@@ -69,10 +69,19 @@ func (c *ConnUtil) CustomCommand(input []byte) (received []byte, err error) {
 	if _, err = c.writeCommand(input); err != nil {
 		return nil, err
 	}
+	time.Sleep(2 * time.Second)
 	var buf = make([]byte, 100)
-	time.Sleep(time.Second)
-	n, err := c.Read(buf)
-	return buf[:n], err
+	var n int
+	for {
+		n, err = c.Read(buf)
+		if err != nil {
+			break
+		}
+		if n > 0 {
+			received = append(received, buf[:n]...)
+		}
+	}
+	return received, err
 }
 
 func (c *ConnUtil) UnlockCheckNotTimeout(err error) {
@@ -147,6 +156,9 @@ func (c *ConnUtil) GetSDI12Data(addr string, extraWakeTime byte, resultsExpected
 }
 
 func (c *ConnUtil) AnalogRead(pin byte) (int, error) {
+	if c.Typ != "arduino" {
+		return 0, errors.New("only for arduino")
+	}
 	var output = "%d\r\n"
 	var val int
 	err := c.Scan([]byte{pin, arduinoCommandEnd}, output, &val)

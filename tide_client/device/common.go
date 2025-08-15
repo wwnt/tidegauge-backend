@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	DataReceive     = make(chan []itemData, 100)
+	DataReceive     = make(chan []itemData, 2000)
 	DevicesUartConn = make(map[string]*connWrap.ConnUtil)
 
 	devicesMu sync.RWMutex
