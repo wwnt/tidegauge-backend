@@ -3,11 +3,6 @@ package controller
 import (
 	"encoding/json"
 	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/hashicorp/yamux"
-	"github.com/jackc/pgx/v5/pgconn"
-	"go.uber.org/zap"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +10,13 @@ import (
 	"tide/pkg/pubsub"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/hashicorp/yamux"
+	"github.com/jackc/pgx/v5/pgconn"
+	"go.uber.org/zap"
 )
 
 func Sync(c *gin.Context) {
@@ -51,14 +53,15 @@ func handleSyncServerConn(conn io.ReadWriteCloser, username string, permissions 
 		permTopic = uuidStringsMapToTopic(permissions)
 	}
 
-	muxConfig := yamux.DefaultConfig()
-	muxConfig.LogOutput = io.Discard
-	session, err := yamux.Server(conn, muxConfig)
+	cnf := yamux.DefaultConfig()
+	cnf.EnableKeepAlive = false
+	cnf.ConnectionWriteTimeout = 120 * time.Second
+	session, err := yamux.Server(conn, cnf)
 	if err != nil {
 		return
 	}
-
 	defer func() { _ = session.Close() }()
+
 	// stream1: increment config sync
 	// stream2: full config sync
 	// stream3: increment data sync

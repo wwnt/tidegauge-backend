@@ -3,6 +3,7 @@ package global
 import (
 	"encoding/json"
 	"log"
+	"log/slog"
 	"net/smtp"
 	"os"
 	"time"
@@ -64,4 +65,14 @@ func ReadConfig(name string) {
 	if Config.Smtp.Username != "" && Config.Smtp.Password != "" && Config.Smtp.Host != "" && Config.Smtp.Addr != "" {
 		Smtp.Auth = smtp.PlainAuth("", Config.Smtp.Username, Config.Smtp.Password, Config.Smtp.Host)
 	}
+
+	var opts = slog.HandlerOptions{AddSource: true}
+	if Config.Debug {
+		opts.Level = slog.LevelDebug
+	} else {
+		opts.Level = slog.LevelInfo
+	}
+	// Create JSON format log handler, suitable for systemd integration
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &opts))
+	slog.SetDefault(logger)
 }
