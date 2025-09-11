@@ -2,6 +2,8 @@ package device
 
 import (
 	"encoding/json"
+	"log/slog"
+	"os"
 	"sync"
 	"sync/atomic"
 	"tide/common"
@@ -54,7 +56,7 @@ func AddCronJob(cron string, items map[string]string, provideItems map[string]in
 	jobWrap := func() {
 		// Determine if this device is being queried
 		if !inQuery.CompareAndSwap(false, true) {
-			global.Log.Errorf("The query interval is too short. items: %+v", items)
+			slog.Warn("Query interval too short", "items", items)
 			return
 		}
 		defer inQuery.Store(false)
@@ -73,7 +75,8 @@ func AddCronJob(cron string, items map[string]string, provideItems map[string]in
 
 func AddCronJobWithOneItem(cron string, itemName string, job func() *float64) {
 	if itemName == "" {
-		global.Log.Fatalf("item_name is empty")
+		slog.Error("Item name cannot be empty")
+		os.Exit(1)
 	}
 	var (
 		inQuery atomic.Bool
@@ -81,7 +84,7 @@ func AddCronJobWithOneItem(cron string, itemName string, job func() *float64) {
 	jobWrap := func() {
 		// Determine if this device is being queried
 		if !inQuery.CompareAndSwap(false, true) {
-			global.Log.Errorf("The query interval is too short. item_name: %v", itemName)
+			slog.Warn("Query interval too short", "item_name", itemName)
 			return
 		}
 		defer inQuery.Store(false)
@@ -95,11 +98,13 @@ func AddCronJobWithOneItem(cron string, itemName string, job func() *float64) {
 
 func verifyItems(items map[string]string, provideItems map[string]int) {
 	if len(items) == 0 {
-		global.Log.Fatal("items empty")
+		slog.Error("Items cannot be empty")
+		os.Exit(1)
 	}
 	for itemType := range items {
 		if _, ok := provideItems[itemType]; !ok {
-			global.Log.Fatal(itemType + " does not exist")
+			slog.Error("Item type does not exist", "item_type", itemType)
+			os.Exit(1)
 		}
 	}
 }

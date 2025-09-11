@@ -3,13 +3,14 @@ package device
 import (
 	"encoding/json"
 	"errors"
-	"github.com/warthog618/go-gpiocdev"
 	"syscall"
 	"tide/common"
 	"tide/pkg"
 	"tide/pkg/project"
 	"tide/tide_client/global"
 	"time"
+
+	"github.com/warthog618/go-gpiocdev"
 )
 
 func init() {

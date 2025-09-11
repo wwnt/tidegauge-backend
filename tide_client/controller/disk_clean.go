@@ -3,7 +3,7 @@ package controller
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -30,7 +30,8 @@ func scheduleRemoveOutdatedData() {
 	for _, ftp := range ftps {
 		ok, err := CheckFtpConfig(ftp)
 		if err != nil {
-			log.Fatal(err)
+			slog.Error("FTP config check failed", "error", err)
+			os.Exit(1)
 		} else if ok {
 			validFtps = append(validFtps, ftp)
 		}
@@ -42,23 +43,29 @@ func scheduleRemoveOutdatedData() {
 		// Check free disk space
 		for _, ftp := range validFtps {
 			if avail, err := CheckDiskSpace(ftp.Path); err != nil {
-				log.Fatalf("CheckDiskSpace error in %s: %s\n", ftp.Path, err)
+				slog.Error("Failed to check disk space", "path", ftp.Path, "error", err)
+				os.Exit(1)
 			} else if avail < minDiskThreshold {
-				log.Fatalf("Disk space is less than %dMB in %s\n", minDiskThreshold/(1024*1024), ftp.Path)
+				slog.Error("Insufficient disk space",
+					"path", ftp.Path,
+					"available_mb", avail/(1024*1024),
+					"threshold_mb", minDiskThreshold/(1024*1024))
+				os.Exit(1)
 			}
 		}
 		db.CleanDBData(time.Now().Add(-global.Config.Db.HoldDays * 24 * time.Hour).Unix())
 	}
 	removeOutdatedDataJob()
 	if _, err := global.CronJob.AddFunc("@daily", removeOutdatedDataJob); err != nil {
-		log.Fatalf("cron.AddFunc error: %s\n", err)
+		slog.Error("Failed to add cleanup cron job", "error", err)
+		os.Exit(1)
 	}
 }
 
 func cleanDir(parentPath string, maxDepth int, currentDepth int, cutoffTime time.Time) {
 	entries, err := os.ReadDir(parentPath)
 	if err != nil {
-		log.Printf("failed to read directory %s: %v\n", parentPath, err)
+		slog.Error("Failed to read directory", "path", parentPath, "error", err)
 		return
 	}
 
@@ -70,14 +77,14 @@ func cleanDir(parentPath string, maxDepth int, currentDepth int, cutoffTime time
 		} else {
 			fileInfo, err := entry.Info()
 			if err != nil {
-				log.Printf("failed to get info for file %s: %v\n", fullPath, err)
+				slog.Error("Failed to get file info", "path", fullPath, "error", err)
 				continue
 			}
 			if fileInfo.ModTime().Before(cutoffTime) {
 				if err = os.Remove(fullPath); err != nil {
-					log.Printf("failed to delete file %s: %v\n", fullPath, err)
+					slog.Error("Failed to delete file", "path", fullPath, "error", err)
 				} else {
-					log.Printf("delete file: %s\n", fullPath)
+					slog.Info("Deleted expired file", "path", fullPath)
 				}
 			}
 		}
@@ -85,12 +92,12 @@ func cleanDir(parentPath string, maxDepth int, currentDepth int, cutoffTime time
 	if currentDepth > maxDepth {
 		isEmpty, err := isDirEmpty(parentPath)
 		if err != nil {
-			log.Printf("failed to check if directory %s is empty: %v\n", parentPath, err)
+			slog.Error("Failed to check if directory is empty", "path", parentPath, "error", err)
 		} else if isEmpty {
 			if err = os.Remove(parentPath); err != nil {
-				log.Printf("failed to delete empty directory %s: %v\n", parentPath, err)
+				slog.Error("Failed to delete empty directory", "path", parentPath, "error", err)
 			} else {
-				log.Printf("deleted empty directory: %s\n", parentPath)
+				slog.Info("Feleted empty directory", "path", parentPath)
 			}
 		}
 	}

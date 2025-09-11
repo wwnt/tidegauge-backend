@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"log"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -14,7 +14,6 @@ import (
 )
 
 func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	flag.StringVar(&global.Config.LogLevel, "log", "debug", "log level")
 	cfgName := flag.String("config", "config.json", "Config file")
 	flag.Parse()
@@ -25,17 +24,19 @@ func init() {
 func main() {
 	controller.Init()
 	go func() {
-		log.Fatal(http.ListenAndServe(global.Config.Listen, nil))
+		err := http.ListenAndServe(global.Config.Listen, nil)
+		slog.Error("HTTP server exited", "error", err)
+		os.Exit(1)
 	}()
 	waitAndCleanUp()
 }
 
 func waitAndCleanUp() {
-	defer project.CallReleaseFunc()
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGTERM, syscall.SIGINT)
 	switch <-ch {
 	case syscall.SIGTERM:
 	case syscall.SIGINT:
 	}
+	project.CallReleaseFunc()
 }

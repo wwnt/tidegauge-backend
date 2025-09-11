@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func Run(isService bool, start, stop, shutdown func(), aborted func(time.Time)) {
+func Run(start, stop, shutdown func(), aborted func(time.Time)) {
 	var err error
 	const lastActive = "lastActive"
 	var lastActiveFile *os.File
@@ -46,14 +46,14 @@ func Run(isService bool, start, stop, shutdown func(), aborted func(time.Time)) 
 		}
 	}()
 
-	if isService {
-		runService(start, stop, shutdown)
-	} else {
-		start()
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL)
+	start()
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL, syscall.SIGUSR1)
 
-		<-c
+	switch <-c {
+	case syscall.SIGUSR1:
+		shutdown()
+	default:
 		stop()
 	}
 	_ = lastActiveFile.Close()
