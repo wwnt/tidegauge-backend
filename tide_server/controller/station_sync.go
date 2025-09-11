@@ -2,15 +2,18 @@ package controller
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
-	"github.com/hashicorp/yamux"
-	"go.uber.org/zap"
+	"log/slog"
 	"net"
+	"os"
 	"strings"
+	"time"
+
 	"tide/common"
 	"tide/tide_server/db"
 	"tide/tide_server/global"
-	"time"
+
+	"github.com/google/uuid"
+	"github.com/hashicorp/yamux"
 )
 
 func tideDataReceiver() {
@@ -19,7 +22,8 @@ func tideDataReceiver() {
 	}
 	ln, err := net.Listen("tcp", global.Config.Tide.Listen)
 	if err != nil {
-		logger.Fatal("", zap.Error(err))
+		slog.Error("Failed to start tide data receiver", "listen", global.Config.Tide.Listen, "error", err)
+		os.Exit(1)
 	}
 	for {
 		conn, err := ln.Accept()
@@ -33,10 +37,10 @@ func tideDataReceiver() {
 func handleStationConn(conn net.Conn) {
 	defer func() {
 		if err := recover(); err != nil {
-			logger.Error("station conn panic", zap.Any("recover", err))
+			slog.Error("Station connection panic", "remote", conn.RemoteAddr().String(), "error", err)
 		}
 		_ = conn.Close()
-		logger.Info("station conn closed", zap.String("remote", conn.RemoteAddr().String()))
+		slog.Info("Station connection closed", "remote", conn.RemoteAddr().String())
 	}()
 	cnf := yamux.DefaultConfig()
 	cnf.KeepAliveInterval = 100 * time.Second
@@ -62,18 +66,18 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 
 	var info common.StationInfoStruct
 	if err = decoder.Decode(&info); err != nil || info.Identifier == "" || len(info.Devices) == 0 {
-		logger.Debug("decode stationInfo", zap.Error(err), zap.String("identifier", info.Identifier))
+		slog.Debug("Failed to decode station info", "identifier", info.Identifier, "error", err)
 		return
 	}
 	stationId, err := db.GetLocalStationIdByIdentifier(info.Identifier)
 	if err != nil {
-		logger.Info("not created", zap.String("identifier", info.Identifier), zap.String("remote", conn.RemoteAddr().String()))
+		slog.Info("Station not created", "identifier", info.Identifier, "remote", conn.RemoteAddr().String())
 		return
 	}
-	logger.Debug("station conn", zap.String("identifier", info.Identifier), zap.String("remote", conn.RemoteAddr().String()))
+	slog.Debug("Station connected", "identifier", info.Identifier, "remote", conn.RemoteAddr().String())
 
 	if _, loaded := recvConnections.LoadOrStore(stationId, session); loaded {
-		logger.Warn("repeated identifier detected", zap.String("identifier", info.Identifier), zap.String("remote", conn.RemoteAddr().String()))
+		slog.Warn("Repeated station identifier detected", "identifier", info.Identifier, "remote", conn.RemoteAddr().String())
 		return
 	}
 
@@ -87,7 +91,7 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 	}
 
 	if err = db.EditStationNotSync(stationId, conn.RemoteAddr().String()); err != nil {
-		logger.Error("db", zap.Error(err))
+		slog.Error("Failed to edit station IP address", "station_id", stationId, "error", err)
 		return
 	}
 
@@ -112,7 +116,7 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 		var msg common.ReceiveMsgStruct
 		if err = decoder.Decode(&msg); err != nil {
 			if !strings.Contains(err.Error(), "use of closed network connection") {
-				logger.Debug("station conn", zap.Error(err))
+				slog.Debug("Station connection decode error", "error", err)
 			}
 			break
 		}
@@ -120,12 +124,12 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 		case common.MsgData:
 			var body common.ItemNameDataTimeStruct
 			if err = json.Unmarshal(msg.Body, &body); err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to unmarshal data message", "error", err)
 				return
 			}
 			// save and publish
 			if _, err = db.SaveDataHistory(stationId, body.ItemName, body.Value, body.Millisecond.ToTime()); err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to save data history", "item_name", body.ItemName, "error", err)
 				return
 			}
 			stationItem := common.StationItemStruct{StationId: stationId, ItemName: body.ItemName}
@@ -137,15 +141,15 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 		case common.MsgGpioData:
 			var body common.ItemNameDataTimeStruct
 			if err = json.Unmarshal(msg.Body, &body); err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to unmarshal GPIO data message", "error", err)
 				return
 			}
 			if _, err = db.UpdateItemStatus(stationId, body.ItemName, common.NoStatus, body.Millisecond.ToTime()); err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to update item status", "item_name", body.ItemName, "error", err)
 				return
 			}
 			if _, err = db.SaveDataHistory(stationId, body.ItemName, body.Value, body.Millisecond.ToTime()); err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to save GPIO data history", "item_name", body.ItemName, "error", err)
 				return
 			}
 			stationItem := common.StationItemStruct{StationId: stationId, ItemName: body.ItemName}
@@ -157,16 +161,16 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 		case common.MsgRpiStatus:
 			var body common.RpiStatusTimeStruct
 			if err = json.Unmarshal(msg.Body, &body); err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to unmarshal RPI status message", "error", err)
 				return
 			}
 			if err = db.SaveRpiStatus(stationId, body.CpuTemp, body.Millisecond.ToTime()); err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to save RPI status", "station_id", stationId, "error", err)
 			}
 		case common.MsgItemStatus:
 			var body common.RowIdItemStatusStruct
 			if err = json.Unmarshal(msg.Body, &body); err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to unmarshal item status message", "error", err)
 				return
 			}
 			// save and publish
@@ -177,15 +181,15 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 }
 
 func saveAndUpdateItemStatus(stationId uuid.UUID, identifier string, statusLog common.RowIdItemStatusStruct) {
-	logger.Debug("update item status",
-		zap.String("identifier", identifier),
-		zap.Int64("rowId", statusLog.RowId),
-		zap.String("item", statusLog.ItemName),
-		zap.String("status", statusLog.Status),
-		zap.Time("changed_at", statusLog.ChangedAt.ToTime()),
+	slog.Debug("Updating item status",
+		"identifier", identifier,
+		"row_id", statusLog.RowId,
+		"item_name", statusLog.ItemName,
+		"status", statusLog.Status,
+		"changed_at", statusLog.ChangedAt.ToTime(),
 	)
 	if n, err := db.UpdateAndSaveStatusLog(stationId, statusLog.RowId, statusLog.ItemName, statusLog.Status, statusLog.ChangedAt.ToTime()); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to update and save status log", "item_name", statusLog.ItemName, "error", err)
 	} else if n > 0 {
 		err = statusPubSub.Publish(SendMsgStruct{Type: kMsgUpdateItemStatus,
 			Body: common.FullItemStatusStruct{
@@ -194,7 +198,7 @@ func saveAndUpdateItemStatus(stationId uuid.UUID, identifier string, statusLog c
 				RowIdItemStatusStruct: statusLog,
 			}}, nil)
 		if err != nil {
-			logger.DPanic("publish", zap.Error(err))
+			slog.Error("Failed to publish status update", "item_name", statusLog.ItemName, "error", err)
 		}
 	}
 }

@@ -2,11 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
-	"github.com/hashicorp/yamux"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"tide/common"
@@ -14,6 +9,12 @@ import (
 	"tide/pkg/wsutil"
 	"tide/tide_server/auth"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"github.com/hashicorp/yamux"
+	"go.uber.org/zap"
 )
 
 const (

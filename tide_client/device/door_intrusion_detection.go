@@ -3,11 +3,12 @@ package device
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"os"
 	"syscall"
 	"tide/common"
 	"tide/pkg"
 	"tide/pkg/project"
-	"tide/tide_client/global"
 	"time"
 
 	"github.com/warthog618/go-gpiocdev"
@@ -39,11 +40,12 @@ func (doorIntrusionDetection) NewDevice(conn any, rawConf json.RawMessage) commo
 		}))
 	if err != nil {
 		if errors.Is(err, syscall.Errno(22)) {
-			global.Log.Error("Note that the WithPullDown option requires kernel V5.5 or later - check your kernel version.")
+			slog.Error("Note that the WithPullDown option requires kernel V5.5 or later - check your kernel version.")
 		}
-		global.Log.Fatalf("RequestLine returned error: %s\n", err)
+		slog.Error("RequestLine returned error", "error", err)
+		os.Exit(1)
 	}
-	global.Log.Debugf("watch on gpio pin: %v", conf.Pin)
+	slog.Info("Watch on gpio pin", "pin", conf.Pin)
 	project.RegisterReleaseFunc(func() { _ = ll.Close() })
 	return common.StringMapMap{conf.DeviceName: map[string]string{"switch_state": conf.ItemName}}
 }

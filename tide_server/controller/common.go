@@ -1,9 +1,9 @@
 package controller
 
 import (
-	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
+	"log/slog"
 	"net/http/pprof"
+	"os"
 	"strings"
 	"sync"
 	"tide/pkg/project"
@@ -14,14 +14,15 @@ import (
 	"tide/tide_server/db"
 	"tide/tide_server/global"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 var (
 	editMu sync.Mutex
-	logger = zap.L()
 
 	dataPubSub      = pubsub.NewPubSub()
-	dataPubSubDelay = pubsub.NewDelayPublish(dataPubSub, global.Config.Tide.DataDelaySec*time.Second, logger)
+	dataPubSubDelay = pubsub.NewDelayPublish(dataPubSub, global.Config.Tide.DataDelaySec*time.Second, nil)
 	missDataPubSub  = pubsub.NewPubSub()
 	statusPubSub    = pubsub.NewPubSub()
 	configPubSub    = pubsub.NewPubSub()
@@ -42,8 +43,6 @@ const (
 func Init() {
 	db.Init()
 	project.RegisterReleaseFunc(db.CloseDB)
-
-	logger = zap.L()
 
 	go func() {
 		for {
@@ -67,7 +66,8 @@ func Init() {
 
 	upstreams, err := db.GetUpstreams()
 	if err != nil {
-		logger.Fatal(err.Error())
+		slog.Error("Failed to get upstreams", "error", err)
+		os.Exit(1)
 	}
 	for _, upstream := range upstreams {
 		go startSync(upstream)
@@ -96,6 +96,9 @@ func Init() {
 	})
 
 	go func() {
-		logger.Fatal("http server err:", zap.Error(r.Run(global.Config.Listen)))
+		if err := r.Run(global.Config.Listen); err != nil {
+			slog.Error("HTTP server failed", "error", err)
+			os.Exit(1)
+		}
 	}()
 }

@@ -3,11 +3,14 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"go.uber.org/zap"
+	"log/slog"
+	"os"
+	"time"
+
 	"tide/common"
 	"tide/tide_server/global"
-	"time"
+
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 var (
@@ -38,18 +41,17 @@ func openDB() error {
 }
 
 func Init() {
-	var (
-		err    error
-		logger = zap.L()
-	)
-	if err = openDB(); err != nil {
-		logger.Fatal("db init", zap.Error(err))
+	if err := openDB(); err != nil {
+		slog.Error("Failed to initialize database", "error", err)
+		os.Exit(1)
 	}
-	if err = setAllDisconnected(); err != nil {
-		logger.Fatal(err.Error())
+	if err := setAllDisconnected(); err != nil {
+		slog.Error("Failed to set all stations disconnected", "error", err)
+		os.Exit(1)
 	}
-	if err = setAllNotAvailable(); err != nil {
-		logger.Fatal(err.Error())
+	if err := setAllNotAvailable(); err != nil {
+		slog.Error("Failed to set all upstream items not available", "error", err)
+		os.Exit(1)
 	}
 }
 

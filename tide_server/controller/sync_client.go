@@ -2,14 +2,16 @@ package controller
 
 import (
 	"context"
-	"github.com/hashicorp/yamux"
-	"go.uber.org/zap"
-	"golang.org/x/oauth2"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
-	"tide/tide_server/db"
 	"time"
+
+	"tide/tide_server/db"
+
+	"github.com/hashicorp/yamux"
+	"golang.org/x/oauth2"
 )
 
 // recvConnections is connections with upstream or tide gauge. Used to get data.
@@ -50,7 +52,7 @@ func fetchUpstreamLoop(upstream *upstreamStorage) {
 func dialUpstream(upstream *upstreamStorage) {
 	req, err := http.NewRequestWithContext(upstream.ctx, http.MethodPost, upstream.config.Url+syncPath, nil)
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to create sync request", "url", upstream.config.Url, "error", err)
 		return
 	}
 	// net/http/response.go: func isProtocolSwitchResponse()
@@ -59,7 +61,7 @@ func dialUpstream(upstream *upstreamStorage) {
 
 	resp, err := upstream.httpClient.Do(req)
 	if err != nil {
-		logger.Debug(err.Error())
+		slog.Debug("Upstream connection failed", "url", upstream.config.Url, "error", err)
 		return
 	}
 	defer func() {
@@ -67,42 +69,45 @@ func dialUpstream(upstream *upstreamStorage) {
 	}()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		logger.Debug(http.StatusText(http.StatusUnauthorized))
+		slog.Debug("Upstream authentication failed", "url", upstream.config.Url, "status", "unauthorized")
 		return
 	}
-	logger.Debug("sync client", zap.String("url", upstream.config.Url))
+	slog.Debug("Sync client connected", "url", upstream.config.Url)
 
 	conn, ok := resp.Body.(io.ReadWriteCloser)
 	if !ok {
-		logger.Error("the resp body does not impl io.Writer")
+		slog.Error("Response body does not implement io.ReadWriteCloser", "url", upstream.config.Url)
 		return
 	}
 	handleSyncClientConn(conn, upstream)
 }
 
 func handleSyncClientConn(conn io.ReadWriteCloser, upstream *upstreamStorage) {
-	session, err := yamux.Client(conn, nil)
+	cnf := yamux.DefaultConfig()
+	cnf.EnableKeepAlive = false
+	cnf.ConnectionWriteTimeout = 120 * time.Second
+	session, err := yamux.Client(conn, cnf)
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to create yamux client session", "url", upstream.config.Url, "error", err)
 		return
 	}
 	defer func() {
-		logger.Debug("sync client closed", zap.String("url", upstream.config.Url))
+		slog.Debug("Sync client connection closed", "url", upstream.config.Url)
 		_ = session.Close()
 		// when the connection is closed, the upstream will be removed from the map
 		if err = db.RemoveAvailableByUpstreamId(upstream.config.Id); err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to remove available items by upstream ID", "upstream_id", upstream.config.Id, "error", err)
 		}
 	}()
 
 	stream1, err := session.Open()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to open stream1", "url", upstream.config.Url, "error", err)
 		return
 	}
 	stream2, err := session.Open()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to open stream2", "url", upstream.config.Url, "error", err)
 		return
 	}
 
@@ -116,12 +121,12 @@ func handleSyncClientConn(conn io.ReadWriteCloser, upstream *upstreamStorage) {
 		for {
 			stream3, err := session.Open()
 			if err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to open stream3", "url", upstream.config.Url, "error", err)
 				return
 			}
 			stream4, err := session.Open()
 			if err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to open stream4", "url", upstream.config.Url, "error", err)
 				return
 			}
 			if !fillMissDataClient(stream4) {

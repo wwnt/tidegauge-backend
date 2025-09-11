@@ -1,15 +1,17 @@
 package controller
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
-	"go.uber.org/zap"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
+	"time"
+
 	"tide/pkg/wsutil"
 	"tide/tide_server/auth"
 	"tide/tide_server/global"
-	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 const syncPath = "/sync"
@@ -21,7 +23,7 @@ func setupRouter() *gin.Engine {
 
 	r := gin.New()
 	//must be setup first
-	r.Use(ZapLogger)
+	r.Use(SlogLogger)
 
 	r.GET("/getSeaLevelList", GetSateAltimetry)
 	r.GET("/seaHeightData", GetSeaLevel)
@@ -80,14 +82,15 @@ func setupRouter() *gin.Engine {
 
 var skipPaths = map[string]struct{}{"getSeaLevelList": {}, "seaHeightData": {}, "getGlossDataList": {}, "getSonelDataList": {}, "getPsmslDataList": {}}
 
-func ZapLogger(c *gin.Context) {
+func SlogLogger(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
 			httpRequest, _ := httputil.DumpRequest(c.Request, false)
 
-			zap.L().Error(c.Request.URL.Path,
-				zap.Any("error", err),
-				zap.String("request", string(httpRequest)),
+			slog.Error("Request panic",
+				"path", c.Request.URL.Path,
+				"error", err,
+				"request", string(httpRequest),
 			)
 			c.AbortWithStatus(http.StatusInternalServerError)
 		}
@@ -96,19 +99,21 @@ func ZapLogger(c *gin.Context) {
 	c.Next()
 
 	if len(c.Errors) > 0 {
-		zap.L().Error(c.Request.URL.Path,
-			zap.String("query", c.Request.URL.RawQuery),
-			zap.String("error", c.Errors.String()),
+		slog.Error("Request error",
+			"path", c.Request.URL.Path,
+			"query", c.Request.URL.RawQuery,
+			"error", c.Errors.String(),
 		)
 	}
 
 	if global.Config.Debug {
 		if _, ok := skipPaths[c.Request.URL.Path]; !ok {
 			latency := time.Now().Sub(start)
-			logger.Debug(c.Request.URL.Path,
-				zap.Int("status", c.Writer.Status()),
-				zap.String("method", c.Request.Method),
-				zap.Duration("latency", latency),
+			slog.Debug("HTTP request",
+				"path", c.Request.URL.Path,
+				"status", c.Writer.Status(),
+				"method", c.Request.Method,
+				"latency", latency,
 			)
 		}
 	}
@@ -135,7 +140,7 @@ func validateWs(c *gin.Context) {
 	} else {
 		user, err := userManager.GetUser(username)
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get user info", "username", username, "error", err)
 			_ = ws.WriteControl(websocket.CloseMessage, wsInternalServerError, time.Now().Add(writeWait))
 			c.Abort()
 			return
@@ -156,7 +161,7 @@ func validate(c *gin.Context) {
 	} else {
 		user, err := userManager.GetUser(username)
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get user info in validation", "username", username, "error", err)
 			c.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}

@@ -1,20 +1,22 @@
 package controller
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"log"
+	"log/slog"
 	"net/http/httptest"
 	"os"
 	"testing"
+
 	"tide/common"
 	"tide/pkg/project"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
 	"tide/tide_server/global"
 	"tide/tide_server/test"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
@@ -23,11 +25,8 @@ func TestMain(m *testing.M) {
 	global.ReadConfig("../config.test.json")
 	global.Config.Debug = true
 
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		log.Fatal(err)
-	}
-	zap.ReplaceGlobals(logger)
+	// slog is already initialized in global.ReadConfig
+	slog.Info("Test environment initialized")
 
 	test.InitDB()
 	test.InitKeycloak(test.AdminUsername, test.AdminPassword, true)
@@ -38,7 +37,6 @@ func TestMain(m *testing.M) {
 	exitCode := m.Run()
 
 	testServer.Close()
-	_ = logger.Sync()
 	project.CallReleaseFunc()
 	db.CloseDB()
 	os.Exit(exitCode)
