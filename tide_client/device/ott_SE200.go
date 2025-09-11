@@ -2,26 +2,33 @@ package device
 
 import (
 	"encoding/json"
+	"log/slog"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
-	"tide/tide_client/global"
 	"time"
 )
 
 func init() {
-	RegisterDevice("SE200", &se200{})
+	RegisterDevice("SE200", &se200{
+		minLevel: -30.0,
+		maxLevel: 30.0,
+	})
 }
 
-type se200 struct{}
+type se200 struct {
+	minLevel float64
+	maxLevel float64
+}
 
-func (se200) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]string {
+func (d *se200) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]string {
 	conn := c.(*connWrap.ConnUtil)
 	var conf struct {
-		DeviceName    string `json:"device_name"`
-		Addr          string `json:"addr"`
-		ExtraWakeTime byte   `json:"extra_wake_time"`
-		Cron          string `json:"cron"`
-		ItemName      string `json:"item_name"`
+		DeviceName    string  `json:"device_name"`
+		Addr          string  `json:"addr"`
+		ExtraWakeTime byte    `json:"extra_wake_time"`
+		Cron          string  `json:"cron"`
+		ItemName      string  `json:"item_name"`
+		Correction    float64 `json:"correction"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 
@@ -32,16 +39,24 @@ func (se200) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]str
 	var job = func() *float64 {
 		err = conn.SDI12ConcurrentMeasurement(conf.Addr, conf.ExtraWakeTime, output, time.Second)
 		if err != nil {
-			global.Log.Error(err)
+			slog.Error("", "error", err)
 			return nil
 		}
 		//2+01.001\r\n
 		values, err := conn.GetSDI12Data(conf.Addr, conf.ExtraWakeTime, 1)
 		if err != nil {
-			global.Log.Error(err)
+			slog.Error("", "error", err)
 			return nil
 		}
-		return values[0]
+		if values[0] != nil {
+			val := *values[0] + conf.Correction
+			if d.minLevel < val && val < d.maxLevel {
+				return &val
+			} else {
+				return nil
+			}
+		}
+		return nil
 	}
 	AddCronJobWithOneItem(conf.Cron, conf.ItemName, job)
 	return map[string]map[string]string{conf.DeviceName: {"water_distance": conf.ItemName}}

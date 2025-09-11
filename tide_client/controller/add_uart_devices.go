@@ -2,12 +2,13 @@ package controller
 
 import (
 	"encoding/json"
+	"log/slog"
+	"os"
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
 	"tide/tide_client/connWrap/uart"
 	"tide/tide_client/device"
-	"tide/tide_client/global"
 )
 
 func init() {
@@ -28,10 +29,12 @@ func newUartConn(rawConf json.RawMessage) common.StringMapMap {
 
 	connCommon, err := uart.NewUart(conf.Port, conf.ReadTimeout, conf.Mode)
 	if err != nil {
-		global.Log.Fatal(err)
+		slog.Error("Connecting", "port", conf.Port, "error", err)
+		os.Exit(1)
 	}
+	slog.Info("Connected", "port", conf.Port)
+
 	connU := connWrap.NewConnUtil(connCommon)
-	global.Log.Info("open", conf.Port)
 	subInfo := device.GetDevice(conf.Model).(device.Device).NewDevice(connU, conf.Config)
 	var info = make(common.StringMapMap)
 	device.MergeInfo(info, subInfo)

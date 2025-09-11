@@ -2,11 +2,12 @@ package global
 
 import (
 	"encoding/json"
-	"github.com/robfig/cron/v3"
 	"log"
+	"log/slog"
 	"os"
-	"tide/pkg/simplelog"
 	"time"
+
+	"github.com/robfig/cron/v3"
 )
 
 type Ftp struct {
@@ -37,8 +38,9 @@ var Config struct {
 	} `json:"cameras"`
 }
 
-var Log *simplelog.Logger
-var CronJob *cron.Cron
+var (
+	CronJob *cron.Cron
+)
 
 func Init(name string) {
 	b, err := os.ReadFile(name)
@@ -49,9 +51,32 @@ func Init(name string) {
 		log.Fatal(err)
 	}
 
-	Log = simplelog.NewLogger(simplelog.GetLevel(Config.LogLevel), log.Default())
+	// Initialize logger
+	initLogger()
+
 	CronJob = cron.New(
 		cron.WithParser(cron.NewParser(cron.SecondOptional|cron.Minute|cron.Hour|cron.Dom|cron.Month|cron.Dow|cron.Descriptor)),
 		cron.WithChain(cron.Recover(cron.DefaultLogger)))
 	CronJob.Start()
+}
+
+func initLogger() {
+	// Set log handler based on configuration level
+	var level slog.Level
+	switch Config.LogLevel {
+	case "debug":
+		level = slog.LevelDebug
+	case "info":
+		level = slog.LevelInfo
+	case "warn":
+		level = slog.LevelWarn
+	case "error":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo
+	}
+
+	// Create JSON format log handler, suitable for systemd integration
+	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level, AddSource: true})
+	slog.SetDefault(slog.New(handler))
 }

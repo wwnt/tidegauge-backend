@@ -2,6 +2,8 @@ package controller
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"os/exec"
 	"tide/common"
 	"tide/pkg/custype"
@@ -16,7 +18,7 @@ func addRpiStatus(dataPub *pubsub.PubSub) {
 			func() {
 				data, err := rpiStat()
 				if err != nil {
-					global.Log.Error(err)
+					slog.Error("Failed to get raspberry pi status", "error", err)
 					return
 				}
 				err = dataPub.Publish(common.SendMsgStruct{
@@ -26,13 +28,14 @@ func addRpiStatus(dataPub *pubsub.PubSub) {
 						Millisecond:     custype.ToTimeMillisecond(time.Now()),
 					}}, nil)
 				if err != nil {
-					global.Log.Error(err)
+					slog.Error("Failed to publish raspberry pi status message", "error", err)
 					return
 				}
 			},
 		)
 		if err != nil {
-			global.Log.Fatal(err)
+			slog.Error("Failed to add raspberry pi status cron job", "error", err)
+			os.Exit(1)
 		}
 	}
 }

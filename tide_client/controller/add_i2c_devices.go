@@ -2,11 +2,13 @@ package controller
 
 import (
 	"encoding/json"
-	"periph.io/x/host/v3/sysfs"
+	"log/slog"
+	"os"
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/device"
-	"tide/tide_client/global"
+
+	"periph.io/x/host/v3/sysfs"
 )
 
 func init() {
@@ -24,11 +26,14 @@ type i2cDeviceConfig struct {
 func newI2cConn(rawConf json.RawMessage) common.StringMapMap {
 	var conf i2cDeviceConfig
 	pkg.Must(json.Unmarshal(rawConf, &conf))
+
 	bus, err := sysfs.NewI2C(conf.BusNumber)
 	if err != nil {
-		panic(err)
+		slog.Error("Connecting", "i2c", conf.BusNumber, "error", err)
+		os.Exit(1)
 	}
-	global.Log.Info("open i2c", conf.BusNumber)
+	slog.Info("Connected", "i2c", conf.BusNumber)
+
 	var info = make(common.StringMapMap)
 	for _, deviceConf := range conf.Config {
 		subInfo := device.GetDevice(deviceConf.Model).(device.Device).NewDevice(bus, deviceConf.Config)

@@ -2,13 +2,14 @@ package db
 
 import (
 	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/require"
-	"log"
+	"log/slog"
 	"os"
 	"testing"
 	"tide/common"
 	"tide/tide_client/global"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -19,7 +20,8 @@ func Init() {
 	var err error
 	db, err = sql.Open("sqlite3", global.Config.Db.Dsn)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to open SQLite database", "dsn", global.Config.Db.Dsn, "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -47,11 +49,13 @@ create index if not exists ` + name + `_timestamp_index on ` + name + ` (timesta
 func InitDB() {
 	initSql, err := os.ReadFile("../schema.sql")
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to read database initialization file", "error", err)
+		os.Exit(1)
 	}
 	_, err = db.Exec(string(initSql))
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("Failed to execute database initialization SQL", "error", err)
+		os.Exit(1)
 	}
 }
 

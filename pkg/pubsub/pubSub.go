@@ -2,10 +2,11 @@ package pubsub
 
 import (
 	"encoding/json"
-	"go.uber.org/zap"
 	"io"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type BytesChan = chan []byte
@@ -22,7 +23,7 @@ type PubSub struct {
 
 // NewSubscriber creates a new subscriber. When the closeChan signal is received, it closes the connection.
 func NewSubscriber(closeChan <-chan struct{}, conn io.WriteCloser) Subscriber {
-	ch := make(BytesChan, 10)
+	ch := make(BytesChan, 10000000)
 	go func() {
 		defer func() { _ = conn.Close() }()
 		var (
