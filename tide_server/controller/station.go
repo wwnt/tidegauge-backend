@@ -1,20 +1,22 @@
 package controller
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/hashicorp/yamux"
-	"go.uber.org/zap"
+	"log/slog"
 	"net/http"
+
 	"tide/pkg/custype"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/hashicorp/yamux"
 )
 
 func ListStation(c *gin.Context) {
 	stations, err := db.GetStations()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to get stations list", "error", err)
 		return
 	}
 	c.JSON(http.StatusOK, stations)
@@ -23,13 +25,13 @@ func ListStation(c *gin.Context) {
 func EditStation(c *gin.Context) {
 	var station db.Station
 	if err := c.Bind(&station); err != nil {
-		logger.Error("EditStation", zap.Error(err))
+		slog.Error("Failed to bind station data", "error", err)
 		return
 	}
 	editMu.Lock()
 	defer editMu.Unlock()
 	if err := db.EditStation(&station); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to edit station", "error", err)
 		return
 	}
 	if !station.Upstream { // Only sync the local station
@@ -48,7 +50,7 @@ func DelStation(c *gin.Context) {
 	}
 	// Can only delete local stations
 	if n, err := db.DelLocalStation(stationId); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to delete local station", "station_id", stationId, "error", err)
 		return
 	} else if n > 0 {
 		if value, ok := recvConnections.Load(stationId); ok {
@@ -63,7 +65,7 @@ func ListDevice(c *gin.Context) {
 	stationId, _ := uuid.Parse(c.Query("station_id"))
 	devices, err := db.GetDevices(stationId)
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to get devices", "station_id", stationId, "error", err)
 		return
 	}
 	c.JSON(http.StatusOK, devices)
@@ -74,7 +76,7 @@ func EditDevice(c *gin.Context) {
 	defer editMu.Unlock()
 	var device db.Device
 	if err := c.Bind(&device); err != nil {
-		logger.Error("", zap.Error(err))
+		slog.Error("Failed to bind device data", "error", err)
 		return
 	}
 	if up, err := db.IsUpstreamStation(device.StationId); err != nil || up {
@@ -82,7 +84,7 @@ func EditDevice(c *gin.Context) {
 	}
 	// Can only edit local stations
 	if err := db.EditDevice(device); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to edit device", "device", device.Name, "error", err)
 		return
 	}
 	sendToConfigPubSub(kMsgSyncDevice, device)
@@ -92,7 +94,7 @@ func EditDevice(c *gin.Context) {
 func ListDeviceRecord(c *gin.Context) {
 	deviceRecords, err := db.GetDeviceRecords()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to get device records", "error", err)
 		return
 	}
 	c.JSON(http.StatusOK, deviceRecords)
@@ -101,7 +103,7 @@ func ListDeviceRecord(c *gin.Context) {
 func EditDeviceRecord(c *gin.Context) {
 	var dr db.DeviceRecord
 	if err := c.Bind(&dr); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to bind device record data", "error", err)
 		return
 	}
 	if dr.Id == uuid.Nil { // Can only edit local stations
@@ -112,7 +114,7 @@ func EditDeviceRecord(c *gin.Context) {
 	editMu.Lock()
 	defer editMu.Unlock()
 	if err := db.EditDeviceRecord(&dr); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to edit device record", "device_record_id", dr.Id, "error", err)
 		return
 	}
 	sendToConfigPubSub(kMsgEditDeviceRecord, dr)
@@ -130,7 +132,7 @@ func ListItem(c *gin.Context) {
 	}
 	items, err := db.GetItems(stationId)
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to get items", "station_id", stationId, "error", err)
 		return
 	}
 	c.JSON(http.StatusOK, items)
@@ -143,7 +145,7 @@ func DataHistory(c *gin.Context) {
 		End      int64  `form:"end"`
 	}
 	if err := c.Bind(&param); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to bind data history parameters", "error", err)
 		return
 	}
 	stationId, err := uuid.Parse(c.Query("station_id"))
@@ -158,7 +160,7 @@ func DataHistory(c *gin.Context) {
 	}
 	ds, err := db.GetDataHistory(stationId, param.ItemName, custype.TimeMillisecond(param.Start), custype.TimeMillisecond(param.End))
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to get data history", "station_id", stationId, "item_name", param.ItemName, "error", err)
 		return
 	}
 	c.JSON(http.StatusOK, ds)

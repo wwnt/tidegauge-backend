@@ -4,19 +4,20 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
+	"time"
+
 	"tide/common"
 	"tide/pkg/pubsub"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
 	"github.com/jackc/pgx/v5/pgconn"
-	"go.uber.org/zap"
 )
 
 func Sync(c *gin.Context) {
@@ -28,7 +29,7 @@ func Sync(c *gin.Context) {
 	c.Writer.WriteHeaderNow()
 	conn, _, err := c.Writer.Hijack()
 	if err != nil {
-		logger.Error("Hijack", zap.Error(err))
+		slog.Error("Failed to hijack connection", "error", err)
 		return
 	}
 	defer func() { _ = conn.Close() }()
@@ -39,7 +40,7 @@ func Sync(c *gin.Context) {
 	if c.GetInt(contextKeyRole) == auth.NormalUser {
 		permissions, err = authorization.GetPermissions(username)
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get user permissions", "username", username, "error", err)
 			return
 		}
 	}
@@ -74,7 +75,7 @@ func handleSyncServerConn(conn io.ReadWriteCloser, username string, permissions 
 	{
 		localAvail, err := db.GetAvailableItems()
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get available items", "error", err)
 			return
 		}
 		var downstreamAvail = make(common.UUIDStringsMap)
@@ -85,7 +86,7 @@ func handleSyncServerConn(conn io.ReadWriteCloser, username string, permissions 
 		}
 
 		if len(downstreamAvail) > 0 {
-			logger.Debug("update available")
+			slog.Debug("Sending available items update")
 			if err = json.NewEncoder(stream1).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: downstreamAvail}); err != nil {
 				return
 			}
@@ -131,22 +132,22 @@ func fullSyncConfigServer(conn net.Conn) {
 
 	stations, err := db.GetStationsFullInfo()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to get stations full info", "error", err)
 		return
 	}
 
-	logger.Debug("send full station info")
+	slog.Debug("Sending full station info")
 	if err = encoder.Encode(stations); err != nil {
 		return
 	}
 
 	deviceRecords, err := db.GetDeviceRecords()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to get device records", "error", err)
 		return
 	}
 
-	logger.Debug("send device record")
+	slog.Debug("Sending device records")
 	err = encoder.Encode(deviceRecords)
 	if err != nil {
 		return
@@ -155,14 +156,14 @@ func fullSyncConfigServer(conn net.Conn) {
 	//miss status
 	var stationsLatestStatusLogRowId map[uuid.UUID]int64
 	if err = decoder.Decode(&stationsLatestStatusLogRowId); err != nil {
-		logger.Debug(err.Error())
+		slog.Debug("Failed to decode stations latest status log row ID", "error", err)
 		return
 	}
 	var missStatusLogs = make(map[uuid.UUID][]common.RowIdItemStatusStruct)
 	for stationId, rowId := range stationsLatestStatusLogRowId {
 		hs, err := db.GetItemStatusLogs(stationId, rowId)
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get item status logs", "station_id", stationId, "row_id", rowId, "error", err)
 			return
 		}
 		if hs != nil {
@@ -170,9 +171,9 @@ func fullSyncConfigServer(conn net.Conn) {
 		}
 	}
 
-	logger.Debug("send miss status log")
+	slog.Debug("Sending miss status logs")
 	if err = encoder.Encode(missStatusLogs); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to encode miss status logs", "error", err)
 		return
 	}
 }
@@ -214,7 +215,7 @@ func fillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 	if permissions == nil {
 		items, err := db.GetItems(uuid.Nil)
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get all items for permissions", "error", err)
 			return
 		}
 		permissions = make(common.UUIDStringsMap)
@@ -225,14 +226,14 @@ func fillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 
 	err := encoder.Encode(permissions)
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to encode permissions", "error", err)
 		return
 	}
 
 	// miss data
 	var stationsItemsLatest map[uuid.UUID]common.StringMsecMap
 	if err = decoder.Decode(&stationsItemsLatest); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to decode stations items latest", "error", err)
 		return
 	}
 
@@ -249,7 +250,7 @@ func fillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 						// relation Table does not exist
 						continue
 					}
-					logger.Error(err.Error())
+					slog.Error("Failed to get data history for miss data", "station_id", stationId, "item_name", itemName, "error", err)
 					return
 				}
 				if len(ds) > 0 {
@@ -262,7 +263,7 @@ func fillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 
 	// send missData
 	if err = encoder.Encode(stationsMissData); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to encode stations miss data", "error", err)
 		return
 	}
 }

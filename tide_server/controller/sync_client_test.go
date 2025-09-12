@@ -2,15 +2,18 @@ package controller
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
-	"github.com/hashicorp/yamux"
-	"github.com/stretchr/testify/require"
 	"io"
+	"log/slog"
 	"net"
 	"testing"
+
 	"tide/common"
 	"tide/pkg/pubsub"
 	"tide/tide_server/db"
+
+	"github.com/google/uuid"
+	"github.com/hashicorp/yamux"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSyncClient(t *testing.T) {
@@ -147,7 +150,7 @@ func mockSyncServer(t *testing.T, conn net.Conn) {
 	require.NoError(t, err)
 
 	{
-		logger.Debug("update available")
+		slog.Debug("Sending available items update in test")
 		err = json.NewEncoder(stream1).Encode(SendMsgStruct{Type: kMsgUpdateAvailable, Body: permissions})
 		require.NoError(t, err)
 	}
@@ -206,12 +209,12 @@ func mockFullSyncServer(conn net.Conn) {
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)
 
-	logger.Debug("send full station info")
+	slog.Debug("Sending full station info in test")
 	if err = encoder.Encode(stationsFullInfo); err != nil {
 		return
 	}
 
-	logger.Debug("send device record")
+	slog.Debug("Sending device records in test")
 	err = encoder.Encode(deviceRecords)
 	if err != nil {
 		return
@@ -220,7 +223,7 @@ func mockFullSyncServer(conn net.Conn) {
 	//miss status
 	var stationsLatestStatusLogRowId map[uuid.UUID]int64
 	if err = decoder.Decode(&stationsLatestStatusLogRowId); err != nil {
-		logger.Debug(err.Error())
+		slog.Debug("Failed to decode stations latest status log row ID in test", "error", err)
 		return
 	}
 	var missStatusLogs = make(map[uuid.UUID][]common.RowIdItemStatusStruct)
@@ -237,9 +240,9 @@ func mockFullSyncServer(conn net.Conn) {
 		}
 	}
 
-	logger.Debug("send miss status log")
+	slog.Debug("Sending miss status logs in test")
 	if err = encoder.Encode(missStatusLogs); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to encode miss status logs in test", "error", err)
 		return
 	}
 }
@@ -250,14 +253,14 @@ func mockFillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 
 	err := encoder.Encode(permissions)
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to encode permissions in test", "error", err)
 		return
 	}
 
 	// miss data
 	var stationsItemsLatest map[uuid.UUID]common.StringMsecMap
 	if err = decoder.Decode(&stationsItemsLatest); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to decode stations items latest in test", "error", err)
 		return
 	}
 
@@ -277,7 +280,7 @@ func mockFillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 
 	// send missData
 	if err = encoder.Encode(stationsMissData); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to encode stations miss data in test", "error", err)
 		return
 	}
 }

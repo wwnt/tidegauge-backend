@@ -3,10 +3,9 @@ package pubsub
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type BytesChan = chan []byte
@@ -156,15 +155,13 @@ type DelayPublish struct {
 	delayPubEntries []delayPubEntry
 	blockInEmptyCh  chan struct{}
 	delay           time.Duration
-	logger          *zap.Logger
 }
 
-func NewDelayPublish(ps *PubSub, delay time.Duration, logger *zap.Logger) *DelayPublish {
+func NewDelayPublish(ps *PubSub, delay time.Duration) *DelayPublish {
 	p := &DelayPublish{
 		PubSub:         ps,
 		blockInEmptyCh: make(chan struct{}),
 		delay:          delay,
-		logger:         logger,
 	}
 	go p.run()
 	return p
@@ -174,7 +171,7 @@ func (p *DelayPublish) DelayPublish(data any, subKey any) {
 	if p.delay == 0 {
 		err := p.Publish(data, subKey)
 		if err != nil {
-			p.logger.WithOptions(zap.AddCallerSkip(1)).DPanic("publish", zap.Error(err))
+			slog.Error("Failed to publish message immediately", "subKey", subKey, "error", err)
 		}
 		return
 	}
@@ -197,9 +194,10 @@ func (p *DelayPublish) run() {
 		}
 		select {
 		case <-timer.C:
-			err = p.Publish(p.delayPubEntries[0].subKey, p.delayPubEntries[0].data)
+			entry := p.delayPubEntries[0]
+			err = p.Publish(entry.data, entry.subKey)
 			if err != nil {
-				p.logger.DPanic("publish", zap.Error(err))
+				slog.Error("Failed to publish delayed message", "subKey", entry.subKey, "error", err)
 			}
 			p.mu.Lock()
 			p.delayPubEntries = p.delayPubEntries[1:]
