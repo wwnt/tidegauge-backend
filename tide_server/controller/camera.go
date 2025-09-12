@@ -3,20 +3,23 @@ package controller
 import (
 	"encoding/json"
 	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/hashicorp/yamux"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path"
 	"strconv"
+
 	"tide/common"
 	"tide/pkg/custype"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
 	"tide/tide_server/global"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/hashicorp/yamux"
 )
 
 func ListCameraStatusPermission(c *gin.Context) {
@@ -35,7 +38,7 @@ func ListCameraStatusPermission(c *gin.Context) {
 	if role >= auth.Admin && username == "" {
 		stations, err := db.GetStations()
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get stations for camera permissions", "error", err)
 			return
 		}
 		var permission = make(map[uuid.UUID]json.RawMessage)
@@ -46,7 +49,7 @@ func ListCameraStatusPermission(c *gin.Context) {
 	} else {
 		permission, err := authorization.GetCameraStatusPermissions(username)
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get camera status permissions", "username", username, "error", err)
 			return
 		}
 		c.JSON(http.StatusOK, permission)
@@ -63,7 +66,7 @@ func EditCameraStatusPermission(c *gin.Context) {
 	}
 	dstUser, err := userManager.GetUser(permission.Username)
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to get user for camera permission edit", "username", permission.Username, "error", err)
 		return
 	}
 	// can not edit admins permission
@@ -71,7 +74,7 @@ func EditCameraStatusPermission(c *gin.Context) {
 		return
 	}
 	if err = authorization.EditCameraStatusPermission(permission.Username, permission.Scopes); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to edit camera status permission", "username", permission.Username, "error", err)
 		return
 	}
 	_, _ = c.Writer.Write([]byte("ok"))
@@ -153,12 +156,12 @@ func CameraLatestSnapShot(c *gin.Context) {
 		var latestCacheTs custype.TimeMillisecond
 		cachedDirs, err := os.ReadDir(path.Join(global.Config.Tide.Camera.Storage, stationId.String(), params.CameraName))
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to read cached dirs", "error", err)
 			if !errors.Is(err, fs.ErrNotExist) {
 				return
 			} else {
 				if err = os.MkdirAll(path.Join(global.Config.Tide.Camera.Storage, stationId.String(), params.CameraName), 0755); err != nil {
-					logger.Error(err.Error())
+					slog.Error("Failed to create cached dirs", "error", err)
 					return
 				}
 			}
@@ -169,7 +172,7 @@ func CameraLatestSnapShot(c *gin.Context) {
 			}
 			ts, err := strconv.ParseInt(name[:13], 10, 0)
 			if err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to parse timestamp", "error", err)
 				return
 			}
 			latestCacheTs = custype.TimeMillisecond(ts)
@@ -177,7 +180,7 @@ func CameraLatestSnapShot(c *gin.Context) {
 		//get upstreams
 		ups, err := db.GetUpstreamsByStationId(stationId)
 		if err != nil {
-			logger.Error(err.Error())
+			slog.Error("Failed to get upstreams", "error", err)
 			return
 		}
 		// get update from upstream
@@ -189,7 +192,7 @@ func CameraLatestSnapShot(c *gin.Context) {
 			up := value.(*upstreamStorage)
 			resp, err := up.httpClient.Get(up.config.Url + cameraLatestSnapshotPath + "?station_id=" + stationId.String() + "&name=" + params.CameraName + "&after=" + latestCacheTs.String())
 			if err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to get upstream snapshot", "error", err)
 				continue
 			}
 			if resp.StatusCode != http.StatusOK {
@@ -199,14 +202,14 @@ func CameraLatestSnapShot(c *gin.Context) {
 			var imgsFromUp []imgInfo
 			err = json.NewDecoder(resp.Body).Decode(&imgsFromUp)
 			if err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to decode upstream snapshot", "error", err)
 				return
 			}
 			_ = resp.Body.Close()
 			for _, img := range imgsFromUp {
 				err = os.WriteFile(path.Join(global.Config.Tide.Camera.Storage, stationId.String(), params.CameraName, img.Millisecond.String()+".jpg"), img.Bytes, 0755)
 				if err != nil {
-					logger.Error(err.Error())
+					slog.Error("Failed to write upstream snapshot", "error", err)
 					return
 				}
 			}
@@ -233,13 +236,13 @@ func CameraLatestSnapShot(c *gin.Context) {
 				}
 				ts, err := strconv.ParseInt(name[:13], 10, 0)
 				if err != nil {
-					logger.Error(err.Error())
+					slog.Error("Failed to parse timestamp", "error", err)
 					return
 				}
 				if ts > params.After && len(imgsReturn) < global.Config.Tide.Camera.LatestSnapshotCount {
 					all, err := os.ReadFile(path.Join(global.Config.Tide.Camera.Storage, stationId.String(), params.CameraName, name))
 					if err != nil {
-						logger.Error(err.Error())
+						slog.Error("Failed to read cached snapshot", "error", err)
 						return
 					}
 					imgsReturn = append(imgsReturn, imgInfo{Millisecond: custype.TimeMillisecond(ts), Bytes: all})
@@ -267,12 +270,12 @@ func CameraLatestSnapShot(c *gin.Context) {
 		for i := len(imgs) - 1; i >= 0; i-- {
 			file, err := os.Open(path.Join(global.Config.Tide.Camera.Storage, stationId.String(), params.CameraName, imgs[i]))
 			if err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to open local snapshot", "error", err)
 				return
 			}
 			info, err := file.Stat()
 			if err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to stat local snapshot", "error", err)
 				return
 			}
 			if info.ModTime().UnixMilli() <= params.After {
@@ -280,7 +283,7 @@ func CameraLatestSnapShot(c *gin.Context) {
 			}
 			all, err := io.ReadAll(file)
 			if err != nil {
-				logger.Error(err.Error())
+				slog.Error("Failed to read local snapshot", "error", err)
 				return
 			}
 			imgsReturn = append(imgsReturn, imgInfo{Millisecond: custype.ToTimeMillisecond(info.ModTime()), Bytes: all})

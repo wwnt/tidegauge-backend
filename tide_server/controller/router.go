@@ -108,7 +108,7 @@ func SlogLogger(c *gin.Context) {
 
 	if global.Config.Debug {
 		if _, ok := skipPaths[c.Request.URL.Path]; !ok {
-			latency := time.Now().Sub(start)
+			latency := time.Since(start)
 			slog.Debug("HTTP request",
 				"path", c.Request.URL.Path,
 				"status", c.Writer.Status(),
@@ -207,12 +207,4 @@ func upgradeWs(c *gin.Context) {
 	wsw := wsutil.WsWrap{Conn: ws}
 	c.Set(contextKeyWsConn, wsw)
 	c.Next()
-}
-
-func lockHandler(h gin.HandlerFunc) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		editMu.Lock()
-		defer editMu.Unlock()
-		h(c)
-	}
 }

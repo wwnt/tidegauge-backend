@@ -3,18 +3,19 @@ package controller
 import (
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
+	"time"
+
 	"tide/common"
 	"tide/pkg/pubsub"
 	"tide/pkg/wsutil"
 	"tide/tide_server/auth"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
-	"go.uber.org/zap"
 )
 
 const (
@@ -46,7 +47,7 @@ func PortTerminalWebsocket(c *gin.Context) {
 	}
 	stationConn, err := value.(*yamux.Session).Open()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to open port terminal connection", "station_id", stationId, "error", err)
 		return
 	}
 	defer func() {
@@ -54,7 +55,7 @@ func PortTerminalWebsocket(c *gin.Context) {
 	}()
 
 	if _, err := stationConn.Write([]byte{common.MsgPortTerminal}); err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to write port terminal message", "station_id", stationId, "error", err)
 		return
 	}
 
@@ -67,7 +68,7 @@ func PortTerminalWebsocket(c *gin.Context) {
 			var msg json.RawMessage
 			if err = stationDecoder.Decode(&msg); err != nil {
 				if err != io.EOF {
-					logger.Error("portTerminal conn", zap.Error(err))
+					slog.Error("Port terminal connection decode error", "station_id", stationId, "error", err)
 				}
 				_ = wsw.WriteControl(websocket.CloseMessage, wsStationDisconnected, time.Now().Add(writeWait))
 				return

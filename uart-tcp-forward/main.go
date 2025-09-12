@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"go.bug.st/serial"
 	"io"
 	"log"
 	"net"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"tide/pkg"
 	"time"
+
+	"go.bug.st/serial"
 )
 
 func main() {

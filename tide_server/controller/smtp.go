@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"log/slog"
 	"net/smtp"
+
 	"tide/tide_server/global"
 )
 
@@ -16,6 +18,6 @@ func SendMail(to []string, body string) error {
 
 func mailDelUser(username string, addr string) {
 	if err := SendMail([]string{addr}, "Account: "+username+" has been deleted."); err != nil {
-		logger.Warn(err.Error())
+		slog.Warn("Failed to send delete user email", "username", username, "email", addr, "error", err)
 	}
 }

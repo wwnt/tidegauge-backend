@@ -2,14 +2,16 @@ package controller
 
 import (
 	"encoding/json"
+	"log/slog"
+	"net"
+	"testing"
+
+	"tide/common"
+	"tide/tide_server/db"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
 	"github.com/stretchr/testify/require"
-	"log"
-	"net"
-	"testing"
-	"tide/common"
-	"tide/tide_server/db"
 )
 
 func Test_handleSyncServerConn(t *testing.T) {
@@ -25,22 +27,22 @@ func Test_handleSyncServerConn(t *testing.T) {
 
 	session, err := yamux.Client(conn2, nil)
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to create yamux client session in test", "error", err)
 		return
 	}
 	defer func() {
-		logger.Debug("sync client closed")
+		slog.Debug("Sync client closed in test")
 		_ = session.Close()
 	}()
 
 	stream1, err := session.Open()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to open stream1 in test", "error", err)
 		return
 	}
 	stream2, err := session.Open()
 	if err != nil {
-		logger.Error(err.Error())
+		slog.Error("Failed to open stream2 in test", "error", err)
 		return
 	}
 
@@ -64,7 +66,7 @@ func Test_handleSyncServerConn(t *testing.T) {
 	var missStatusLogs map[uuid.UUID][]common.RowIdItemStatusStruct
 	err = decoder.Decode(&missStatusLogs)
 	require.NoError(t, err)
-	log.Println(missStatusLogs) //map[]
+	slog.Debug("Miss status logs in test", "data", missStatusLogs)
 
 	_ = stream2.Close()
 
@@ -81,7 +83,7 @@ func Test_handleSyncServerConn(t *testing.T) {
 	var permissions common.UUIDStringsMap
 	err = decoder.Decode(&permissions)
 	require.NoError(t, err)
-	log.Println(permissions) // map[4affa658-951e-472c-a6d5-d02ca0266267:[location1_air_humidity location1_air_visibility]]
+	slog.Debug("Permissions in test", "data", permissions)
 
 	var stationsItemsLatest = make(map[uuid.UUID]common.StringMsecMap)
 	for stationId, items := range permissions {
@@ -98,7 +100,7 @@ func Test_handleSyncServerConn(t *testing.T) {
 	var stationsMissData map[uuid.UUID]map[string][]common.DataTimeStruct
 	err = decoder.Decode(&stationsMissData)
 	require.NoError(t, err)
-	log.Println(stationsMissData) //map[4affa658-951e-472c-a6d5-d02ca0266267:map[]]
+	slog.Debug("Stations miss data in test", "data", stationsMissData)
 
 	_ = stream4.Close()
 	_ = stream3.Close()

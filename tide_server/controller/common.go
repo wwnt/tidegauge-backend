@@ -22,7 +22,7 @@ var (
 	editMu sync.Mutex
 
 	dataPubSub      = pubsub.NewPubSub()
-	dataPubSubDelay = pubsub.NewDelayPublish(dataPubSub, global.Config.Tide.DataDelaySec*time.Second, nil)
+	dataPubSubDelay = pubsub.NewDelayPublish(dataPubSub, global.Config.Tide.DataDelaySec*time.Second)
 	missDataPubSub  = pubsub.NewPubSub()
 	statusPubSub    = pubsub.NewPubSub()
 	configPubSub    = pubsub.NewPubSub()
