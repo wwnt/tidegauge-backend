@@ -1,5 +1,5 @@
 {
-    "port": "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AK06YNFW-if00-port0",
+    "port": "/dev/tty.usb-1.4.1",
     "read_timeout": 1000,
     "mode": {
         "baud_rate": 9600,
@@ -22,10 +22,21 @@
             "config": {
                 "device_name": "地点1风",
                 "addr": "2",
-                "cron": "@every 30s",
+                "cron": "@every 1m",
                 "items": {
                     "wind_speed": "location1_wind_speed",
                     "wind_direction": "location1_wind_direction"
+                }
+            }
+        },
+        {
+            "model": "PTB330",
+            "config": {
+                "device_name": "Digital Barometer",
+                "cron": "@every 1m",
+                "addr": "3",
+                "items": {
+                    "air_pressure": "location1_air_pressure"
                 }
             }
         },
@@ -34,7 +45,7 @@
             "config": {
                 "device_name": "地点1温湿度",
                 "addr": "5",
-                "cron": "@every 30s",
+                "cron": "@every 1m",
                 "items": {
                     "air_humidity": "location1_air_humidity",
                     "air_temperature": "location1_air_temperature"

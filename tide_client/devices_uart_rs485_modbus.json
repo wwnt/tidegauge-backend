@@ -4,7 +4,7 @@
     "mode": {
         "baud_rate": 9600,
         "data_bits": 8,
-        "parity": 0
+        "parity": "None"
     },
     "model": "uart-rs485",
     "config": [

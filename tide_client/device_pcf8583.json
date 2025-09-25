@@ -6,7 +6,7 @@
                 "addr": 160,
                 "device_name": "Rain Gauge RG13",
 		        "model": "RG13",
-		        "cron": "@every 5s",
+		        "cron": "@every 1m",
 		        "item_name": "rain_volume",
                 "resolution": 0.1,
 		        "reset_c": true
