@@ -19,7 +19,7 @@
 /tide_client/tide_client
 /tide_client/data.db
 
-/tide_server/tide.service
+/tide_server/tide_server
 /tide_server/config.json
 /tide_server/docker-compose.yml
 
