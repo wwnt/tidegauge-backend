@@ -4,10 +4,11 @@
             "model": "pcf8583",
             "config": {
                 "addr": 160,
-                "device_name": "pcf8583",
-		        "model": "pcf8583",
+                "device_name": "Rain Gauge RG13",
+		        "model": "RG13",
 		        "cron": "@every 5s",
-		        "item_name": "counter",
+		        "item_name": "rain_volume",
+                "resolution": 0.1,
 		        "reset_c": true
             }
         }

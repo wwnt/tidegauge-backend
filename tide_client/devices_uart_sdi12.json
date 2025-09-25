@@ -1,0 +1,41 @@
+{
+	"port": "/dev/tty.usb-1.3",
+	"read_timeout": 2000,
+	"mode": {
+		"baud_rate": 9600,
+		"data_bits": 8,
+		"parity": 0
+	},
+	"model": "arduino",
+	"config": {
+		"sdi12": [
+			{
+				"model": "SE200",
+				"config": {
+					"device_name": "Shaft Encoder",
+					"extra_wake_time": 7,
+					"addr": "2",
+					"cron": "@every 50s",
+					"item_name": "location1_water_distance"
+				}
+			},
+			{
+				"model": "PLS-C",
+				"config": {
+					"device_name": "Pressure Probe with Conductivity Sensor",
+					"extra_wake_time": 4,
+					"addr": "1",
+					"cron": "@every 40s",
+					"items": {
+						"water_level": "location1_water_level",
+						"water_temperature": "location1_water_temperature",
+						"water_conductivity": "location1_water_conductivity",
+						"water_salinity": "location1_water_salinity",
+						"water_total_dissolved_solids": "location1_water_total_dissolved_solids"
+					}
+				}
+			}
+		],
+		"analog": []
+	}
+}

@@ -1,52 +1,39 @@
 {
-    "bus_number": 1,
-    "config": [
-        {
-			"model": "ads1115",
-			"config": {
-				"addr": 72,
-				"extra_wake_time": 4,
-				"items": [{
-					"channel": 4,
-					"device_name": "ads1115",
-					"model": "ads1115",
-					"cron": "@every 5s",
-					"item_type": "Analog0",
-					"item_name": "channel0",
-					"ch_m": 1,
-					"ch_b": 0
-				},
-				{
-					"channel": 5,
-					"device_name": "ads1115",
-					"model": "ads1115",
-					"cron": "@every 5s",
-					"item_type": "Analog1",
-					"item_name": "channel1",
-					"ch_m": 1,
-					"ch_b": 0
-				},
-				{
-					"channel": 6,
-					"device_name": "ads1115",
-					"model": "ads1115",
-					"cron": "@every 5s",
-					"item_type": "Analog2",
-					"item_name": "channel2",
-					"ch_m": 1,
-					"ch_b": 0
-				},
-				{
-					"channel": 7,
-					"device_name": "ads1115",
-					"model": "ads1115",
-					"cron": "@every 5s",
-					"item_type": "Analog3",
-					"item_name": "battery",
-					"ch_m": 7.363636363636363636,
-					"ch_b": 0
-				}]
-			}
-        }
-    ]
+  "bus_number": 1,
+  "config": [
+    {
+      "model": "ads1115",
+      "config": {
+        "addr": 72,
+        "extra_wake_time": 4,
+        "items": [
+			  {
+				"channel": 4,
+				"device_name": "ads1115",
+				"model": "ads1115",
+				"cron": "@every 5s",
+				"item_type": "Analog0",
+				"item_name": "drd11a_analog_out_ch0",
+				"ch_m": 1,
+				"ch_b": 0
+			  },
+			  {
+				"channel": 7,
+				"device_name": "ads1115",
+				"model": "ads1115",
+				"cron": "@every 1m",
+				"item_type": "Analog3",
+				"item_name": "battery",
+				"ch_m": 7.869625927831,
+				"ch_b": 0
+			  }
+        ]
+      }
+    }
+  ]
 }
+
+
+
+
+

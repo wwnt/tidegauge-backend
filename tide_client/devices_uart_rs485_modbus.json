@@ -1,0 +1,21 @@
+{
+    "port": "/dev/tty.usb-1.4.4",
+    "read_timeout": 1000,
+    "mode": {
+        "baud_rate": 9600,
+        "data_bits": 8,
+        "parity": 0
+    },
+    "model": "uart-rs485",
+    "config": [
+        {
+			"model": "VEGAPULS61",
+			"config": {
+				"device_name": "地点1雷达液位计",
+				"cron": "@every 20s",
+				"addr": 246,
+				"item_name": "location1_radar_water_distance_vega61"
+			}
+		}
+    ]
+}
