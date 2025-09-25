@@ -1,11 +1,8 @@
 package controller
 
 import (
-	"bytes"
 	"fmt"
-	"os"
 	"os/exec"
-	"strconv"
 	"tide/common"
 	"tide/pkg/custype"
 	"tide/pkg/pubsub"
@@ -41,18 +38,6 @@ func addRpiStatus(dataPub *pubsub.PubSub) {
 }
 
 func rpiCPUTemp() (float64, error) {
-	b, err := os.ReadFile("/sys/class/thermal/thermal_zone0/temp")
-	if err != nil {
-		return 0, err
-	}
-	t, err := strconv.ParseInt(string(bytes.TrimSpace(b)), 10, 0)
-	if err != nil {
-		return 0, err
-	}
-	return float64(t) / 1000, err
-}
-
-func rpiGPUTemp() (float64, error) {
 	b, err := exec.Command("vcgencmd", "measure_temp").Output()
 	if err != nil {
 		return 0, err
@@ -67,9 +52,5 @@ func rpiGPUTemp() (float64, error) {
 
 func rpiStat() (s common.RpiStatusStruct, err error) {
 	s.CpuTemp, err = rpiCPUTemp()
-	if err != nil {
-		return
-	}
-	s.GpuTemp, err = rpiGPUTemp()
 	return
 }

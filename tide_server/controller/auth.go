@@ -95,9 +95,9 @@ func EditUser(c *gin.Context) {
 							logger.Error(err.Error())
 							return
 						}
-						changeUserPermissionScope(reqUser.Username, permissions)
+						handlePermissionChange(reqUser.Username, permissions)
 					} else {
-						changeUserPermissionScope(reqUser.Username, nil)
+						handlePermissionChange(reqUser.Username, nil)
 					}
 				}
 			} else if errors.Is(err, auth.ErrUserNotFound) {
@@ -256,7 +256,7 @@ func EditPermission(c *gin.Context) {
 		logger.Error(err.Error())
 		return
 	}
-	changeUserPermissionScope(params.Username, params.Permissions)
+	handlePermissionChange(params.Username, params.Permissions)
 	_, _ = c.Writer.Write([]byte("ok"))
 }
 
@@ -280,7 +280,7 @@ func EditUpstream(c *gin.Context) {
 		logger.Error(err.Error())
 		return
 	}
-	if value, ok := connections.Load(upstream.Id); ok {
+	if value, ok := recvConnections.Load(upstream.Id); ok {
 		value.(*upstreamStorage).cancelF()
 	}
 	go startSync(upstream)
@@ -305,7 +305,7 @@ func DelUpstream(c *gin.Context) {
 	for _, stationId := range stationIds {
 		Publish(configPubSub, SendMsgStruct{Type: kMsgDelUpstreamStation, Body: stationId}, nil)
 	}
-	if value, ok := connections.LoadAndDelete(params.Id); ok {
+	if value, ok := recvConnections.LoadAndDelete(params.Id); ok {
 		value.(*upstreamStorage).cancelF()
 	}
 	_, _ = c.Writer.Write([]byte("ok"))

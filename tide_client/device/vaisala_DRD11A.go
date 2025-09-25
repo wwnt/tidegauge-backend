@@ -2,6 +2,7 @@ package device
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/warthog618/gpiod"
 	"syscall"
 	"tide/common"
@@ -21,7 +22,7 @@ func (dRD11A) Analog() float64 {
 	return 0
 }
 
-func (dRD11A) NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (dRD11A) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 	gpio := conn.(*gpiod.Chip)
 	var conf struct {
 		DeviceName string `json:"device_name"`
@@ -40,7 +41,7 @@ func (dRD11A) NewDevice(conn interface{}, rawConf json.RawMessage) common.String
 			DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &rain}}
 		}))
 	if err != nil {
-		if err == syscall.Errno(22) {
+		if errors.Is(err, syscall.Errno(22)) {
 			global.Log.Error("Note that the WithPullDown option requires kernel V5.5 or later - check your kernel version.")
 		}
 		global.Log.Fatalf("RequestLine returned error: %s\n", err)

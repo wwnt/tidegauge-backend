@@ -15,8 +15,9 @@ func TestPubSub_Evict(t *testing.T) {
 		p        = NewPubSub()
 		key      = "123"
 	)
-	p.SubscribeTopic(conn1, TopicMap{key: struct{}{}})
-	p.Evict(conn1)
+	subscriber := NewSubscriber(nil, conn1)
+	p.SubscribeTopic(subscriber, TopicMap{key: struct{}{}})
+	p.Evict(subscriber)
 	_, ok := p.subscribers.Load(conn1)
 	assert.False(t, ok)
 }
@@ -27,8 +28,9 @@ func TestPubSub_EvictAndClose(t *testing.T) {
 		p        = NewPubSub()
 		key      = "123"
 	)
-	p.SubscribeTopic(conn1, TopicMap{key: struct{}{}})
-	p.EvictAndClose(conn1)
+	subscriber := NewSubscriber(nil, conn1)
+	p.SubscribeTopic(subscriber, TopicMap{key: struct{}{}})
+	p.EvictAndClose(subscriber)
 	_, ok := p.subscribers.Load(conn1)
 	assert.False(t, ok)
 	_, err := conn1.Write([]byte{0})
@@ -44,9 +46,10 @@ func TestPubSub_LimitTopicScope(t *testing.T) {
 			name: "1",
 			test: func(t *testing.T) {
 				conn1, _ := net.Pipe()
+				subscriber := NewSubscriber(nil, conn1)
 				p := NewPubSub()
-				p.SubscribeTopic(conn1, TopicMap{"1": struct{}{}, "2": struct{}{}})
-				p.LimitTopicScope(conn1, TopicMap{"3": struct{}{}, "2": struct{}{}})
+				p.SubscribeTopic(subscriber, TopicMap{"1": struct{}{}, "2": struct{}{}})
+				p.LimitTopicScope(subscriber, TopicMap{"3": struct{}{}, "2": struct{}{}})
 				val, ok := p.subscribers.Load(conn1)
 				assert.True(t, ok)
 				assert.Equal(t, TopicMap{"2": struct{}{}}, val)
@@ -62,8 +65,8 @@ func TestPubSub_LimitTopicScope(t *testing.T) {
 
 func TestPubSub_Publish(t *testing.T) {
 	type args struct {
-		data   interface{}
-		subKey interface{}
+		data   any
+		subKey any
 	}
 	tests := []struct {
 		name    string
@@ -78,14 +81,15 @@ func TestPubSub_Publish(t *testing.T) {
 				var data = "123"
 				p := NewPubSub()
 				conn1, conn2 := net.Pipe()
-				ch := make(chan interface{}, 1)
+				subscriber := NewSubscriber(nil, conn1)
+				ch := make(chan any, 1)
 				go func() {
-					var val interface{}
+					var val any
 					err := json.NewDecoder(conn2).Decode(&val)
 					require.NoError(t, err)
 					ch <- val
 				}()
-				p.SubscribeTopic(conn1, TopicMap{key: struct{}{}})
+				p.SubscribeTopic(subscriber, TopicMap{key: struct{}{}})
 				err := p.Publish(data, key)
 				assert.NoError(t, err)
 				assert.Equal(t, data, <-ch)
@@ -105,7 +109,8 @@ func TestPubSub_SubscribeTopic(t *testing.T) {
 		p        = NewPubSub()
 		key      = "1"
 	)
-	p.SubscribeTopic(conn1, TopicMap{key: struct{}{}})
+	subscriber := NewSubscriber(nil, conn1)
+	p.SubscribeTopic(subscriber, TopicMap{key: struct{}{}})
 	_, ok := p.subscribers.Load(conn1)
 	assert.True(t, ok)
 }

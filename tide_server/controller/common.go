@@ -18,15 +18,16 @@ import (
 
 var (
 	editMu sync.Mutex
+	logger = zap.L()
 
-	dataPubSub     = pubsub.NewPubSub()
-	missDataPubSub = pubsub.NewPubSub()
-	statusPubSub   = pubsub.NewPubSub()
-	configPubSub   = pubsub.NewPubSub()
+	dataPubSub      = pubsub.NewPubSub()
+	dataPubSubDelay = pubsub.NewDelayPublish(dataPubSub, global.Config.Tide.DataDelaySec*time.Second, logger)
+	missDataPubSub  = pubsub.NewPubSub()
+	statusPubSub    = pubsub.NewPubSub()
+	configPubSub    = pubsub.NewPubSub()
 
 	userManager   auth.UserManager
 	authorization auth.Permission
-	logger        = zap.L()
 )
 
 const (

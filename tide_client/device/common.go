@@ -15,10 +15,10 @@ var (
 	DevicesUartConn = make(map[string]*connWrap.ConnUtil)
 
 	devicesMu sync.RWMutex
-	devices   = make(map[string]interface{})
+	devices   = make(map[string]any)
 )
 
-func RegisterDevice(name string, d interface{}) {
+func RegisterDevice(name string, d any) {
 	devicesMu.Lock()
 	defer devicesMu.Unlock()
 	if d == nil {
@@ -30,7 +30,7 @@ func RegisterDevice(name string, d interface{}) {
 	devices[name] = d
 }
 
-func GetDevice(m string) interface{} {
+func GetDevice(m string) any {
 	return devices[m]
 }
 
@@ -41,24 +41,25 @@ type itemData struct {
 }
 
 type Device interface {
-	NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap
+	NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap
 }
 
 func AddCronJob(cron string, items map[string]string, provideItems map[string]int, job func() map[string]*float64) {
 	verifyItems(items, provideItems)
 	var (
-		inQuery int32 = 0
+		inQuery atomic.Bool
 		tmpData map[string]*float64
 	)
 
 	jobWrap := func() {
 		// Determine if this device is being queried
-		if !atomic.CompareAndSwapInt32(&inQuery, 0, 1) {
+		if !inQuery.CompareAndSwap(false, true) {
 			global.Log.Errorf("The query interval is too short. items: %+v", items)
 			return
 		}
+		defer inQuery.Store(false)
+
 		tmpData = job()
-		atomic.StoreInt32(&inQuery, 0)
 
 		var sendData []itemData
 		for itemType, itemName := range items {
@@ -75,16 +76,18 @@ func AddCronJobWithOneItem(cron string, itemName string, job func() *float64) {
 		global.Log.Fatalf("item_name is empty")
 	}
 	var (
-		inQuery int32 = 0
+		inQuery atomic.Bool
 	)
 	jobWrap := func() {
 		// Determine if this device is being queried
-		if !atomic.CompareAndSwapInt32(&inQuery, 0, 1) {
+		if !inQuery.CompareAndSwap(false, true) {
 			global.Log.Errorf("The query interval is too short. item_name: %v", itemName)
 			return
 		}
+		defer inQuery.Store(false)
+
 		val := job()
-		atomic.StoreInt32(&inQuery, 0)
+
 		DataReceive <- []itemData{{Typ: common.MsgData, ItemName: itemName, Value: val}}
 	}
 	pkg.Must2(global.CronJob.AddFunc(cron, jobWrap))

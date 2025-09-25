@@ -9,6 +9,7 @@ import (
 	"net"
 	"testing"
 	"tide/common"
+	"tide/pkg/pubsub"
 	"tide/tide_server/db"
 )
 
@@ -26,14 +27,15 @@ func TestSyncClient(t *testing.T) {
 	conn3, conn4 := net.Pipe() // conn3: sync server , conn4: sync client
 	defer func() { _ = conn3.Close() }()
 
-	configPubSub.SubscribeTopic(conn3, nil)
-	defer configPubSub.Evict(conn3)
-	statusPubSub.SubscribeTopic(conn3, nil)
-	defer statusPubSub.Evict(conn3)
-	dataPubSub.SubscribeTopic(conn3, nil)
-	defer dataPubSub.Evict(conn3)
-	missDataPubSub.SubscribeTopic(conn3, nil)
-	defer missDataPubSub.Evict(conn3)
+	subscriber := pubsub.NewSubscriber(nil, conn3)
+	configPubSub.SubscribeTopic(subscriber, nil)
+	defer configPubSub.Evict(subscriber)
+	statusPubSub.SubscribeTopic(subscriber, nil)
+	defer statusPubSub.Evict(subscriber)
+	dataPubSub.SubscribeTopic(subscriber, nil)
+	defer dataPubSub.Evict(subscriber)
+	missDataPubSub.SubscribeTopic(subscriber, nil)
+	defer missDataPubSub.Evict(subscriber)
 
 	go func() {
 		defer func() { _ = conn1.Close() }()
@@ -152,10 +154,11 @@ func mockSyncServer(t *testing.T, conn net.Conn) {
 	// increment and full are separated to avoid receiving increment first
 	// make sure subscribe first
 	{
-		configPubSub.SubscribeTopic(stream1, nil)
-		defer configPubSub.Evict(stream1)
-		statusPubSub.SubscribeTopic(stream1, nil)
-		defer statusPubSub.Evict(stream1)
+		subscriber := pubsub.NewSubscriber(nil, stream1)
+		configPubSub.SubscribeTopic(subscriber, nil)
+		defer configPubSub.Evict(subscriber)
+		statusPubSub.SubscribeTopic(subscriber, nil)
+		defer statusPubSub.Evict(subscriber)
 	}
 
 	stream2, err := session.Accept()

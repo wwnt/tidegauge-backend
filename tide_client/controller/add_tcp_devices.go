@@ -25,11 +25,11 @@ func newTcpConn(rawConf json.RawMessage) common.StringMapMap {
 	var conf tcpDeviceConfig
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 
+	global.Log.Infof("connecting to %s\n", conf.Addr)
 	connCommon, err := tcp.NewTcp(conf.Addr, conf.ReadTimeout)
 	if err != nil {
-		global.Log.Fatal(err)
+		global.Log.Warn(err)
 	}
-	global.Log.Infof("connected to %s\n", conf.Addr)
 
 	connU := connWrap.NewConnUtil(connCommon)
 

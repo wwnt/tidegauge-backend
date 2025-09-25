@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"io"
@@ -191,7 +192,7 @@ func incrementSyncConfigClient(conn net.Conn, upstream *upstreamStorage) {
 	)
 	for {
 		if err := decoder.Decode(&msg); err != nil {
-			if err != io.EOF && err != context.Canceled && !strings.Contains(err.Error(), "use of closed network connection") {
+			if err != io.EOF && !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "use of closed network connection") {
 				logger.Error(err.Error())
 			}
 			break
@@ -314,6 +315,7 @@ func handleSyncConfigMsg(msg RcvMsgStruct, upstream *upstreamStorage) (retOk boo
 	// establish connection
 	// change sync user permission
 	// upstream relay
+	// add item
 	case kMsgUpdateAvailable:
 		var body common.UUIDStringsMap
 		if err = json.Unmarshal(msg.Body, &body); err != nil {
@@ -326,7 +328,7 @@ func handleSyncConfigMsg(msg RcvMsgStruct, upstream *upstreamStorage) (retOk boo
 			return
 		}
 		if n > 0 {
-			changeUserAvailableScope(body)
+			handleAvailableChange(body)
 			return true
 		}
 	}

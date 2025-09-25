@@ -38,7 +38,7 @@ func PortTerminalWebsocket(c *gin.Context) {
 	if err != nil {
 		return
 	}
-	value, ok := connections.Load(stationId)
+	value, ok := recvConnections.Load(stationId)
 	if !ok {
 		_ = wsw.WriteControl(websocket.CloseMessage, wsStationDisconnected, time.Now().Add(writeWait))
 		return
@@ -95,12 +95,15 @@ func DataWebsocket(c *gin.Context) {
 		username = c.GetString(contextKeyUsername)
 	)
 
-	addUserConn(username, wsw, connTypeWebBrowser)
+	subscriber := pubsub.NewSubscriber(c.Request.Context().Done(), wsw)
+
+	addUserConn(username, subscriber, connTypeWebBrowser)
 	defer func() {
-		delUserConn(username, wsw)
-		dataPubSub.Evict(wsw)
+		delUserConn(username, subscriber)
+		dataPubSub.Evict(subscriber)
 	}()
 	go wsw.Ping(c.Request.Context().Done())
+
 	// reader
 	for {
 		var msg map[uuid.UUID][]string
@@ -108,7 +111,7 @@ func DataWebsocket(c *gin.Context) {
 			return
 		}
 		if len(msg) == 0 {
-			dataPubSub.Evict(wsw)
+			dataPubSub.Evict(subscriber)
 			continue
 		}
 		if c.GetInt(contextKeyRole) < auth.Admin {
@@ -122,21 +125,23 @@ func DataWebsocket(c *gin.Context) {
 				}
 			}
 		}
-		subs := make(pubsub.TopicMap)
+		topics := make(pubsub.TopicMap)
 		for stationId, items := range msg {
 			for _, item := range items {
-				subs[common.StationItemStruct{StationId: stationId, ItemName: item}] = struct{}{}
+				topics[common.StationItemStruct{StationId: stationId, ItemName: item}] = struct{}{}
 			}
 		}
-		dataPubSub.SubscribeTopic(wsw, subs)
+		dataPubSub.SubscribeTopic(subscriber, topics)
 	}
 }
 
 func GlobalWebsocket(c *gin.Context) {
 	wsw := c.MustGet(contextKeyWsConn).(wsutil.WsWrap)
 
-	defer statusPubSub.Evict(wsw)
-	statusPubSub.SubscribeTopic(wsw, nil)
+	subscriber := pubsub.NewSubscriber(c.Request.Context().Done(), wsw)
+
+	defer statusPubSub.Evict(subscriber)
+	statusPubSub.SubscribeTopic(subscriber, nil)
 
 	go wsw.Ping(c.Request.Context().Done())
 	// reader

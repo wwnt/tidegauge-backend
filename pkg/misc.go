@@ -12,7 +12,7 @@ func Must(err error) {
 	}
 }
 
-func Must2(_ interface{}, err error) {
+func Must2(_ any, err error) {
 	if err != nil {
 		panic(err)
 	}

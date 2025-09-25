@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"io"
@@ -20,7 +21,7 @@ func syncDataClient(conn net.Conn) {
 	for {
 		var msg forwardDataStruct
 		if err = decoder.Decode(&msg); err != nil {
-			if err != io.EOF && err != context.Canceled && !strings.Contains(err.Error(), "use of closed network connection") {
+			if err != io.EOF && !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "use of closed network connection") {
 				logger.Error(err.Error())
 			}
 			break
@@ -47,6 +48,7 @@ func syncDataClient(conn net.Conn) {
 			if msg.Type == kMsgMissData {
 				Publish(missDataPubSub, msg, msg.StationItemStruct)
 			} else {
+				// msg.Type == kMsgData
 				Publish(dataPubSub, msg, msg.StationItemStruct)
 			}
 		}

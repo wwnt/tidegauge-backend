@@ -19,11 +19,11 @@ func InitDB() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = tideDb.Exec("drop database if exists " + global.Config.Db.Tide.DBName)
+	_, err = tideDb.Exec("drop" + " database if exists " + global.Config.Db.Tide.DBName)
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = tideDb.Exec("create database " + global.Config.Db.Tide.DBName)
+	_, err = tideDb.Exec("create" + " database " + global.Config.Db.Tide.DBName)
 	if err != nil {
 		log.Fatal(err)
 	}

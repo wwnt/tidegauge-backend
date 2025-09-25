@@ -62,12 +62,12 @@ func EditStation(s *Station) (err error) {
 	defer func() { _ = tx.Rollback() }()
 	if s.Id == uuid.Nil {
 		// create
-		var deletedAt interface{}
+		var deletedAt any
 		if err = tx.QueryRow(`select id, deleted_at from stations where identifier=$1 and upstream=false`, s.Identifier).Scan(&s.Id, &deletedAt); err != nil {
-			if err != sql.ErrNoRows {
+			if !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
-			if s.Id, err = uuid.NewUUID(); err != nil { //not found
+			if s.Id, err = uuid.NewUUID(); err != nil {
 				return err
 			}
 			_, err = tx.Exec(`insert into stations(id,identifier,name,location,partner,upstream) VALUES ($1,$2,$3,$4,$5,false)`, s.Id, s.Identifier, s.Name, s.Location, s.Partner)
@@ -75,7 +75,7 @@ func EditStation(s *Station) (err error) {
 			if deletedAt == nil {
 				return errors.New("already has the same identifier")
 			}
-			_, err = tx.Exec(`update stations set name=$2,location=$3,partner=$4,deleted_at=null where id=$1`, s.Id, s.Name, s.Location, s.Partner)
+			_, err = tx.Exec(`update stations set name=$2,location=$3,partner=$4,upstream=false,deleted_at=null where id=$1`, s.Id, s.Name, s.Location, s.Partner)
 		}
 	} else {
 		// update
@@ -101,15 +101,15 @@ func SyncStation(upstreamId int, s Station) (int64, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	_, err = tx.Exec(`insert into upstream_stations(upstream_id, station_id) VALUES ($1,$2) on conflict do nothing`, upstreamId, s.Id)
-	if err != nil {
-		return 0, err
-	}
-
 	res, err := tx.Exec(`insert into stations(id,identifier,name,location,upstream) VALUES ($1,$2,$3,$4,true) on conflict (id) 
 do update set location=excluded.location, upstream=true, deleted_at=null where stations.location!=$4 or stations.upstream!=true or stations.deleted_at is not null`,
 		s.Id, s.Identifier, s.Name, s.Location)
 	n, err := checkResult(res, err)
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = tx.Exec(`insert into upstream_stations(upstream_id, station_id) VALUES ($1,$2) on conflict do nothing`, upstreamId, s.Id)
 	if err != nil {
 		return 0, err
 	}
@@ -134,15 +134,18 @@ func DelLocalStation(id uuid.UUID) (int64, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	n, err := checkResult(
-		tx.Exec("update stations set deleted_at=now() where id=$1 and upstream=false", id),
+		tx.Exec("update stations set deleted_at=now() where id = $1 and upstream=false", id),
 	)
 	if err != nil || n == 0 {
 		return n, err
 	}
-	if _, err = tx.Exec("delete from items   where station_id=$1", id); err != nil {
+	if _, err = tx.Exec("delete from items   where station_id = $1", id); err != nil {
 		return 0, err
 	}
-	if _, err = tx.Exec("delete from devices where station_id=$1", id); err != nil {
+	if _, err = tx.Exec("delete from devices where station_id = $1", id); err != nil {
+		return 0, err
+	}
+	if _, err = tx.Exec("delete from item_status_log where station_id = $1", id); err != nil {
 		return 0, err
 	}
 	err = tx.Commit()

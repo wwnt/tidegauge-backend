@@ -15,7 +15,7 @@ func init() {
 
 type arduino struct{}
 
-func (arduino) NewDevice(c interface{}, rawConf json.RawMessage) common.StringMapMap {
+func (arduino) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	conn := c.(*connWrap.ConnUtil)
 	conn.Typ = "arduino"
 	var conf struct {

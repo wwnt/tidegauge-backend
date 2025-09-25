@@ -3,7 +3,7 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/Nerzal/gocloak/v11"
+	"github.com/Nerzal/gocloak/v13"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -36,7 +36,7 @@ func TestWebapi(t *testing.T) {
 	})
 
 	t.Run("login_superAdmin", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodPost, "/login", strings.NewReader("username="+test.AdminUsername+"&password="+test.AdminPassword))
+		req, _ := http.NewRequest(http.MethodPost, loginPath, strings.NewReader("username="+test.AdminUsername+"&password="+test.AdminPassword))
 		addPostFormContentHeader(req)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)
@@ -219,7 +219,7 @@ func TestWebapi(t *testing.T) {
 	})
 
 	t.Run("login_user01", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodPost, "/login", strings.NewReader("username="+user01.Username+"&password="+user01.Password))
+		req, _ := http.NewRequest(http.MethodPost, loginPath, strings.NewReader("username="+user01.Username+"&password="+user01.Password))
 		addPostFormContentHeader(req)
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, req)

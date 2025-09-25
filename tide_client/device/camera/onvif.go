@@ -1,9 +1,9 @@
 package camera
 
 import (
-	"go.fuchsia.dev/fuchsia/tools/net/digest"
 	"io"
 	"net/http"
+	"tide/pkg/net/digest"
 )
 
 func OnvifSnapshot(url string, username, password string) ([]byte, error) {

@@ -19,8 +19,8 @@ type StationInfoStruct struct {
 }
 
 type SendMsgStruct struct {
-	Type MsgType     `json:"type"`
-	Body interface{} `json:"body"`
+	Type MsgType `json:"type"`
+	Body any     `json:"body"`
 }
 
 type ReceiveMsgStruct struct {
@@ -30,7 +30,6 @@ type ReceiveMsgStruct struct {
 
 type RpiStatusStruct struct {
 	CpuTemp float64 `json:"cpu_temp"`
-	GpuTemp float64 `json:"gpu_temp"`
 }
 
 type RpiStatusTimeStruct struct {

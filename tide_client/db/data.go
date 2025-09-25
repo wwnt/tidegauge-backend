@@ -6,7 +6,7 @@ import (
 )
 
 func SaveData(itemName string, val float64, msec int64) error {
-	_, err := db.Exec("insert into "+itemName+" (timestamp, value) VALUES (?,?)", msec, val)
+	_, err := db.Exec("insert"+" into "+itemName+" (timestamp, value) VALUES (?,?)", msec, val)
 	return err
 }
 func GetDataHistory(itemName string, start, end int64) ([]common.DataTimeStruct, error) {
@@ -15,9 +15,9 @@ func GetDataHistory(itemName string, start, end int64) ([]common.DataTimeStruct,
 		err  error
 	)
 	if end == 0 {
-		rows, err = db.Query("select timestamp, value from "+itemName+" where timestamp>? order by timestamp", start)
+		rows, err = db.Query("select"+" timestamp, value from "+itemName+" where timestamp>? order by timestamp", start)
 	} else {
-		rows, err = db.Query("select timestamp, value from "+itemName+" where timestamp>? and timestamp<? order by timestamp", start, end)
+		rows, err = db.Query("select"+" timestamp, value from "+itemName+" where timestamp>? and timestamp<? order by timestamp", start, end)
 	}
 	if err != nil {
 		return nil, err

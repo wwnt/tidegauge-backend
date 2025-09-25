@@ -115,13 +115,10 @@ drop table if exists item1 cascade;
 	require.NoError(t, err)
 
 	upstream1 = Upstream{
-		Id:             0,
-		Username:       "tgm-admin",
-		Password:       "123456",
-		Sync:           "http://localhost:7100/sync",
-		Login:          "http://localhost:7100/login",
-		DataHistory:    "http://localhost:7100/dataHistory",
-		LatestSnapshot: "http://localhost:7100/latestSnapshot",
+		Id:       0,
+		Username: "tgm-admin",
+		Password: "123456",
+		Url:      "http://localhost:7100",
 	}
 	err = EditUpstream(&upstream1)
 	require.NoError(t, err)

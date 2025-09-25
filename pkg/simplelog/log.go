@@ -65,13 +65,13 @@ func (l *Logger) Output(level Level, calldepth int, s string) {
 	}
 }
 
-func (l *Logger) println(level Level, v ...interface{}) {
+func (l *Logger) println(level Level, v ...any) {
 	if level >= l.enableLevel {
 		_ = l.log.Output(3, fmt.Sprintln(v...))
 	}
 }
 
-func (l *Logger) printf(level Level, format string, v ...interface{}) {
+func (l *Logger) printf(level Level, format string, v ...any) {
 	if level >= l.enableLevel {
 		_ = l.log.Output(3, fmt.Sprintf(format, v...))
 	}
@@ -81,45 +81,45 @@ func (l *Logger) SetEnableLevel(level Level) {
 	l.enableLevel = level
 }
 
-func (l *Logger) Debug(v ...interface{}) {
+func (l *Logger) Debug(v ...any) {
 	l.println(DebugLevel, v...)
 }
 
-func (l *Logger) Info(v ...interface{}) {
+func (l *Logger) Info(v ...any) {
 	l.println(InfoLevel, v...)
 }
 
-func (l *Logger) Warn(v ...interface{}) {
+func (l *Logger) Warn(v ...any) {
 	l.println(WarnLevel, v...)
 }
 
-func (l *Logger) Error(v ...interface{}) {
+func (l *Logger) Error(v ...any) {
 	l.println(ErrorLevel, v...)
 }
 
-func (l *Logger) Fatal(v ...interface{}) {
+func (l *Logger) Fatal(v ...any) {
 	l.println(FatalLevel, v...)
 	_, _ = l.log.Writer().Write(debug.Stack())
 	os.Exit(1)
 }
 
-func (l *Logger) Debugf(format string, v ...interface{}) {
+func (l *Logger) Debugf(format string, v ...any) {
 	l.printf(DebugLevel, format, v...)
 }
 
-func (l *Logger) Infof(format string, v ...interface{}) {
+func (l *Logger) Infof(format string, v ...any) {
 	l.printf(InfoLevel, format, v...)
 }
 
-func (l *Logger) Warnf(format string, v ...interface{}) {
+func (l *Logger) Warnf(format string, v ...any) {
 	l.printf(WarnLevel, format, v...)
 }
 
-func (l *Logger) Errorf(format string, v ...interface{}) {
+func (l *Logger) Errorf(format string, v ...any) {
 	l.printf(ErrorLevel, format, v...)
 }
 
-func (l *Logger) Fatalf(format string, v ...interface{}) {
+func (l *Logger) Fatalf(format string, v ...any) {
 	l.printf(FatalLevel, format, v...)
 	_, _ = l.log.Writer().Write(debug.Stack())
 	os.Exit(1)

@@ -12,7 +12,6 @@ import (
 
 type ConnCommon interface {
 	io.ReadWriter
-	ReadyToRead() (n uint32, err error)
 	ResetInputBuffer() (err error)
 }
 
@@ -28,11 +27,20 @@ func NewConnUtil(conn ConnCommon) *ConnUtil {
 	}
 }
 
+func (c *ConnUtil) writeCommand(input []byte) (n int, err error) {
+	// may be the previous command is not finished
+	time.Sleep(500 * time.Millisecond)
+	if err = c.ResetInputBuffer(); err != nil {
+		return 0, err
+	}
+	return c.Write(input)
+}
+
 func (c *ConnUtil) ReadLine(input []byte) (line string, err error) {
 	defer c.UnlockCheckNotTimeout(err)
 	c.Lock()
 
-	_, err = c.Write(input)
+	_, err = c.writeCommand(input)
 	if err != nil {
 		return "", err
 	}
@@ -40,11 +48,10 @@ func (c *ConnUtil) ReadLine(input []byte) (line string, err error) {
 	return line, err
 }
 
-func (c *ConnUtil) Scan(wait time.Duration, input []byte, outputF string, v ...interface{}) (err error) {
+func (c *ConnUtil) Scan(input []byte, outputF string, v ...any) (err error) {
 	defer c.UnlockCheckNotTimeout(err)
 	c.Lock()
-	time.Sleep(wait)
-	_, err = c.Write(input)
+	_, err = c.writeCommand(input)
 	if err != nil {
 		return &Error{Type: ErrIO, Send: input, Err: err}
 	}
@@ -59,31 +66,17 @@ func (c *ConnUtil) CustomCommand(input []byte) (received []byte, err error) {
 	defer c.UnlockCheckNotTimeout(err)
 	c.Lock()
 
-	if _, err = c.Write(input); err != nil {
+	if _, err = c.writeCommand(input); err != nil {
 		return nil, err
 	}
 	var buf = make([]byte, 100)
-	time.Sleep(300 * time.Millisecond)
-	for {
-		n, err := c.Read(buf)
-		if err != nil {
-			return nil, err
-		}
-		received = append(received, buf[:n]...)
-		time.Sleep(100 * time.Millisecond)
-		readyN, err := c.ReadyToRead()
-		if err != nil {
-			return nil, err
-		}
-		if readyN <= 0 {
-			break
-		}
-	}
-	return received, err
+	time.Sleep(time.Second)
+	n, err := c.Read(buf)
+	return buf[:n], err
 }
 
 func (c *ConnUtil) UnlockCheckNotTimeout(err error) {
-	if err != nil && err != ErrTimeout {
+	if err != nil && !errors.Is(err, ErrTimeout) {
 		time.Sleep(time.Second) // wait for end
 	}
 	c.Unlock()
@@ -93,13 +86,12 @@ const arduinoCommandEnd = '\xFF'
 
 func (c *ConnUtil) SDI12ConcurrentMeasurement(addr string, extraWakeTime byte, output string, wait time.Duration) error {
 	var input = []byte(addr + "C!")
-	//log.Println(string(input))
 	if c.Typ == "arduino" {
 		// additional Bytes for arduino
 		input = append(input, extraWakeTime, arduinoCommandEnd)
 	}
 
-	if err := c.Scan(time.Second, input, output); err != nil {
+	if err := c.Scan(input, output); err != nil {
 		return err
 	}
 	time.Sleep(wait)
@@ -115,12 +107,10 @@ func (c *ConnUtil) GetSDI12Data(addr string, extraWakeTime byte, resultsExpected
 	reader := bufio.NewReader(c)
 	for resultsReceived < resultsExpected && cmdNumber <= 9 {
 		input := []byte(addr + "D" + strconv.Itoa(cmdNumber) + "!")
-		//log.Println(string(input))
 		if c.Typ == "arduino" {
 			input = append(input, extraWakeTime, arduinoCommandEnd)
 		}
-		time.Sleep(time.Second)
-		if _, err = c.Write(input); err != nil {
+		if _, err = c.writeCommand(input); err != nil {
 			return nil, &Error{Type: ErrIO, Err: err}
 		}
 		if _, err = reader.Discard(1); err != nil { // sensor address
@@ -159,6 +149,6 @@ func (c *ConnUtil) GetSDI12Data(addr string, extraWakeTime byte, resultsExpected
 func (c *ConnUtil) AnalogRead(pin byte) (int, error) {
 	var output = "%d\r\n"
 	var val int
-	err := c.Scan(0, []byte{pin, arduinoCommandEnd}, output, &val)
+	err := c.Scan([]byte{pin, arduinoCommandEnd}, output, &val)
 	return val, err
 }

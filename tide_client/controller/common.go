@@ -2,7 +2,6 @@ package controller
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 	"sync"
 	"tide/common"
@@ -19,10 +18,10 @@ var (
 	dataReceiveMu sync.Mutex
 
 	connRegMu sync.RWMutex
-	connReg   = make(map[string]interface{})
+	connReg   = make(map[string]any)
 )
 
-func RegisterConn(name string, d interface{}) {
+func RegisterConn(name string, d any) {
 	connRegMu.Lock()
 	defer connRegMu.Unlock()
 	if d == nil {
@@ -34,7 +33,7 @@ func RegisterConn(name string, d interface{}) {
 	connReg[name] = d
 }
 
-func GetRegConn(name string) interface{} {
+func GetRegConn(name string) any {
 	return connReg[name]
 }
 
@@ -116,7 +115,6 @@ func receiveData(dataPub *pubsub.PubSub) {
 			defer dataReceiveMu.Unlock()
 			now = custype.ToTimeMillisecond(time.Now())
 			for _, data := range itemsData {
-				log.Println(data, *data.Value)
 				if data.Typ == common.MsgData {
 					if data.Value == nil {
 						if itemsStatus[data.ItemName].Status != common.Abnormal {
