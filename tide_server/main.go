@@ -48,7 +48,7 @@ func main() {
 
 	controller.Init()
 
-	project.Run(startRunningStatus, stopRunningStatus, shutdownRunningStatus, abortedRunningStatus)
+	project.Run(startRunningStatus, stopRunningStatus, abortedRunningStatus)
 	project.CallReleaseFunc()
 }
 
@@ -57,9 +57,6 @@ func startRunningStatus() {
 }
 func stopRunningStatus() {
 	slog.Info("update running status", "status", "stopped")
-}
-func shutdownRunningStatus() {
-	slog.Info("update running status", "status", "shutdown")
 }
 func abortedRunningStatus(t time.Time) {
 	slog.Info("update running status", "status", "aborted", "at", t)

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func Run(start, stop, shutdown func(), aborted func(time.Time)) {
+func Run(start, stop func(), aborted func(time.Time)) {
 	var err error
 	const lastActive = "lastActive"
 	var lastActiveFile *os.File
@@ -48,11 +48,9 @@ func Run(start, stop, shutdown func(), aborted func(time.Time)) {
 
 	start()
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT, syscall.SIGKILL, syscall.SIGUSR1)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 
 	switch <-c {
-	case syscall.SIGUSR1:
-		shutdown()
 	default:
 		stop()
 	}
