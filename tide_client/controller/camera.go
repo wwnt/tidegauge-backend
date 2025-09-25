@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"log/slog"
 	"os"
 	"path"
 	"tide/tide_client/global"
@@ -9,7 +10,7 @@ import (
 
 func scheduleRemoveCameraOutdated() {
 	if global.Config.Cameras.Ftp.Path != "" {
-		removeCameraOutdatedFileJob := func() { recursiveDir(global.Config.Cameras.Ftp.Path, removeCameraOutdatedFile) }
+		removeCameraOutdatedFileJob := func() { cleanDir(global.Config.Cameras.Ftp.Path, global.Config.Cameras.Ftp.HoldDays, 0) }
 		removeCameraOutdatedFileJob()
 		if _, err := global.CronJob.AddFunc("@daily", removeCameraOutdatedFileJob); err != nil {
 			global.Log.Fatal(err)
@@ -17,50 +18,31 @@ func scheduleRemoveCameraOutdated() {
 	}
 }
 
-func removeCameraOutdatedFile(parentPath string, dir os.DirEntry) (retOk bool) {
-	if dir.Name()[0] == '.' { //ignore
-		return
-	}
-	if dir.IsDir() {
-		if t, err := time.Parse("2006-01-02", dir.Name()); err == nil {
-			if t.Before(global.CameraHoldTime) {
-				if err = os.RemoveAll(path.Join(parentPath, dir.Name())); err != nil {
-					global.Log.Error(err)
-				}
-			}
-			return
-		}
-		return true
-	} else {
-		if dir.Name() == "DVRWorkDirectory" {
-			return
-		}
-		fileInfo, err := dir.Info()
-		if err != nil {
-			global.Log.Error(err)
-			return
-		}
-		if fileInfo.ModTime().Before(global.CameraHoldTime) {
-			if err = os.Remove(path.Join(parentPath, dir.Name())); err != nil {
-				global.Log.Error(err)
-			}
-		}
-		return
-	}
-}
-
-func recursiveDir(parentPath string, handleFunc func(parentPath string, dir os.DirEntry) bool) {
-	dirs, err := os.ReadDir(parentPath)
+func cleanDir(parentPath string, maxAge time.Duration, depth int) {
+	expireTime := time.Now().Add(-maxAge)
+	entries, err := os.ReadDir(parentPath)
 	if err != nil {
-		global.Log.Error(err)
+		slog.Error("read dir error", err)
 		return
 	}
-	if len(dirs) == 0 && parentPath != global.Config.Cameras.Ftp.Path {
+	if len(entries) == 0 && depth > 1 {
 		_ = os.Remove(parentPath)
 	}
-	for _, dir := range dirs {
-		if handleFunc(parentPath, dir) {
-			recursiveDir(path.Join(parentPath, dir.Name()), handleFunc)
+	for _, entry := range entries {
+		fullPath := path.Join(parentPath, entry.Name())
+		if entry.IsDir() {
+			cleanDir(fullPath, maxAge, depth+1)
+		} else {
+			fileInfo, err := entry.Info()
+			if err != nil {
+				slog.Error("read file info error", err)
+				return
+			}
+			if fileInfo.ModTime().Before(expireTime) {
+				if err = os.Remove(fullPath); err != nil {
+					slog.Error("remove file error", err)
+				}
+			}
 		}
 	}
 }

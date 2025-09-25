@@ -2,7 +2,7 @@ package controller
 
 import (
 	"encoding/json"
-	"github.com/warthog618/gpiod"
+	"github.com/warthog618/go-gpiocdev"
 	"tide/common"
 	"tide/pkg"
 	"tide/pkg/project"
@@ -26,7 +26,7 @@ func newGpioConn(rawConf json.RawMessage) common.StringMapMap {
 	var conf gpioDevicesConfig
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 
-	rpiGPIO, err := gpiod.NewChip(conf.Name)
+	rpiGPIO, err := gpiocdev.NewChip(conf.Name)
 	if err != nil {
 		global.Log.Fatal(err)
 	}
