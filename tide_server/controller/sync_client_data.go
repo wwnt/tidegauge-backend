@@ -32,7 +32,7 @@ func syncDataClient(conn net.Conn) {
 		// First time received
 		if _, ok := receivedItems[msg.StationItemStruct]; !ok {
 			receivedItems[msg.StationItemStruct] = struct{}{}
-			slog.Debug("First time receiving data from item", "station_id", msg.StationId, "item_name", msg.ItemName)
+			slog.Debug("First time receiving data", "station_id", msg.StationId, "item_name", msg.ItemName)
 			// First make sure the table exists
 			if err = db.MakeSureTableExist(msg.ItemName); err != nil {
 				slog.Error("Failed to create table for item", "item_name", msg.ItemName, "error", err)

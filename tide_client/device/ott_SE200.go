@@ -39,13 +39,13 @@ func (d *se200) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]
 	var job = func() *float64 {
 		err = conn.SDI12ConcurrentMeasurement(conf.Addr, conf.ExtraWakeTime, output, time.Second)
 		if err != nil {
-			slog.Error("", "error", err)
+			slog.Error("Failed to perform SDI-12 concurrent measurement", "device", "SE200", "addr", conf.Addr, "error", err)
 			return nil
 		}
 		//2+01.001\r\n
 		values, err := conn.GetSDI12Data(conf.Addr, conf.ExtraWakeTime, 1)
 		if err != nil {
-			slog.Error("", "error", err)
+			slog.Error("Failed to get SDI-12 data", "device", "SE200", "addr", conf.Addr, "error", err)
 			return nil
 		}
 		if values[0] != nil {

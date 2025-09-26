@@ -38,9 +38,7 @@ var Config struct {
 	} `json:"cameras"`
 }
 
-var (
-	CronJob *cron.Cron
-)
+var CronJob *cron.Cron
 
 func Init(name string) {
 	b, err := os.ReadFile(name)

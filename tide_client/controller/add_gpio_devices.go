@@ -33,9 +33,8 @@ func newGpioConn(rawConf json.RawMessage) common.StringMapMap {
 		slog.Error("Connecting", "gpio", conf.Name, "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Connected", "gpio", conf.Name)
-
 	project.RegisterReleaseFunc(func() { _ = rpiGPIO.Close() })
+	slog.Info("Connected", "gpio", conf.Name)
 
 	var info = make(common.StringMapMap)
 	for _, deviceConf := range conf.Config {
