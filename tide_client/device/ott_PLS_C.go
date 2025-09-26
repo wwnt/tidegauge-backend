@@ -58,15 +58,15 @@ func (d *plsC) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]s
 	var job = func() map[string]*float64 {
 		err = conn.SDI12ConcurrentMeasurement(conf.Addr, conf.ExtraWakeTime, output, 5*time.Second)
 		if err != nil {
-			slog.Error("", "error", err)
+			slog.Error("Failed to perform SDI-12 concurrent measurement", "device", "PLS-C", "addr", conf.Addr, "error", err)
 			return nil
 		}
 		values, err := conn.GetSDI12Data(conf.Addr, conf.ExtraWakeTime, 5)
 		if err != nil {
-			slog.Error("", "error", err)
+			slog.Error("Failed to get SDI-12 data", "device", "PLS-C", "addr", conf.Addr, "error", err)
 			return nil
 		}
-		// 增加最大值最小值限制
+
 		if values[0] != nil {
 			if d.minLevel < *values[0] && *values[0] < d.maxLevel {
 				tmpData["water_level"] = values[0]

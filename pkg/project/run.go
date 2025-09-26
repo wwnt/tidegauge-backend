@@ -50,10 +50,9 @@ func Run(start, stop func(), aborted func(time.Time)) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 
-	switch <-c {
-	default:
-		stop()
-	}
+	<-c
+	stop()
+
 	_ = lastActiveFile.Close()
 	if err = os.Remove(lastActive); err != nil {
 		log.Println(err)
