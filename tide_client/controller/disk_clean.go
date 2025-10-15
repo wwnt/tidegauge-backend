@@ -97,7 +97,7 @@ func cleanDir(parentPath string, maxDepth int, currentDepth int, cutoffTime time
 			if err = os.Remove(parentPath); err != nil {
 				slog.Error("Failed to delete empty directory", "path", parentPath, "error", err)
 			} else {
-				slog.Info("Feleted empty directory", "path", parentPath)
+				slog.Info("Deleted empty directory", "path", parentPath)
 			}
 		}
 	}
