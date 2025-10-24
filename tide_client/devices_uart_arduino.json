@@ -24,6 +24,17 @@
                         "water_total_dissolved_solids": "location1_water_total_dissolved_solids"
                     }
                 }
+            },
+            {
+                "model": "SE200",
+                "config": {
+                    "device_name": "地点1浮子水位计",
+                    "extra_wake_time": 7,
+                    "correction": 8,
+                    "addr": "2",
+                    "cron": "@every 50s",
+                    "item_name": "location1_water_distance"
+                }
             }
         ],
         "analog": [

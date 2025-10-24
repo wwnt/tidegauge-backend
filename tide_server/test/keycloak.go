@@ -3,10 +3,11 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/Nerzal/gocloak/v13"
 	"log"
 	"net/http"
 	"tide/tide_server/global"
+
+	"github.com/Nerzal/gocloak/v13"
 )
 
 const (
@@ -64,5 +65,5 @@ createRealm:
 		log.Fatal(err)
 	}
 	global.Config.Keycloak.ClientSecret = *credential.Value
-	fmt.Println("client secret:", *credential.Value)
+	fmt.Println("Client secret:", *credential.Value)
 }

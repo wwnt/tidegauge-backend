@@ -2,12 +2,12 @@ package device
 
 import (
 	"encoding/json"
+	"log/slog"
 	"strconv"
 	"strings"
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
-	"tide/tide_client/global"
 )
 
 func init() {
@@ -37,11 +37,11 @@ func (hMP155) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	var job = func() map[string]*float64 {
 		line, err = conn.ReadLine(input)
 		if err != nil {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrIO, Err: err})
+			slog.Error("IO error while reading from HMP155 device", "error", err)
 			return nil
 		}
 		if line[0] == '*' {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrDevice, Err: err})
+			slog.Error("Device error from HMP155 device", "error", err)
 			return nil
 		}
 
@@ -49,13 +49,13 @@ func (hMP155) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 
 		val := strings.TrimSpace(getStringInBetween(line, "RH=", "%RH"))
 		if val == "" {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Err: err})
+			slog.Error("Parse error for RH value from HMP155 device", "error", err)
 			return nil
 		} else if val[0] == '*' {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrItem, Err: err})
+			slog.Error("Item error for RH value from HMP155 device", "error", err)
 		} else {
 			if f, err := strconv.ParseFloat(val, 64); err != nil {
-				global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Err: err})
+				slog.Error("Parse error while converting RH value from HMP155 device", "error", err)
 				return nil
 			} else {
 				rh = &f
@@ -64,13 +64,13 @@ func (hMP155) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 
 		val = strings.TrimSpace(getStringInBetween(line, "T=", "'C"))
 		if val == "" {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Err: err})
+			slog.Error("Parse error for T value from HMP155 device", "error", err)
 			return nil
 		} else if val[0] == '*' {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrItem, Err: err})
+			slog.Error("Item error for T value from HMP155 device", "error", err)
 		} else {
 			if f, err := strconv.ParseFloat(val, 64); err != nil {
-				global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Err: err})
+				slog.Error("Parse error while converting T value from HMP155 device", "error", err)
 				return nil
 			} else {
 				t = &f

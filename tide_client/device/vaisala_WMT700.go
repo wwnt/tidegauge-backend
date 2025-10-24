@@ -2,12 +2,12 @@ package device
 
 import (
 	"encoding/json"
+	"log/slog"
 	"strconv"
 	"strings"
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
-	"tide/tide_client/global"
 )
 
 func init() {
@@ -39,34 +39,34 @@ func (wmt700) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	var job = func() map[string]*float64 {
 		line, err = conn.ReadLine(input)
 		if err != nil {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrIO, Received: []byte(line), Err: err})
+			slog.Error("IO error while reading from WMT700 device", "error", err, "received", []byte(line))
 			return nil
 		}
 		var ws, wd *float64
 
 		val := strings.TrimSpace(getStringInBetween(line, "$", ","))
 		if val == "" {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Received: []byte(line), Err: err})
+			slog.Error("Parse error for first value from WMT700 device", "error", err, "received", []byte(line))
 			return nil
 		}
 		if f, err := strconv.ParseFloat(val, 64); err != nil {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Received: []byte(line), Err: err})
+			slog.Error("Parse error while converting first value from WMT700 device", "error", err, "received", []byte(line))
 			return nil
 		} else if f >= 999 {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrItem, Received: []byte(line), Err: err})
+			slog.Error("Item error for first value from WMT700 device (value >= 999)", "error", err, "received", []byte(line))
 		} else {
 			ws = &f
 		}
 		val = strings.TrimSpace(getStringInBetween(line, ",", "\r"))
 		if val == "" {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Received: []byte(line), Err: err})
+			slog.Error("Parse error for second value from WMT700 device", "error", err, "received", []byte(line))
 			return nil
 		}
 		if f, err := strconv.ParseFloat(val, 64); err != nil {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Received: []byte(line), Err: err})
+			slog.Error("Parse error while converting second value from WMT700 device", "error", err, "received", []byte(line))
 			return nil
 		} else if f >= 999 {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrItem, Received: []byte(line), Err: err})
+			slog.Error("Item error for second value from WMT700 device (value >= 999)", "error", err, "received", []byte(line))
 		} else {
 			wd = &f
 		}

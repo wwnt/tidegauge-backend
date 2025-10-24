@@ -2,12 +2,12 @@ package device
 
 import (
 	"encoding/json"
+	"log/slog"
 	"strconv"
 	"strings"
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
-	"tide/tide_client/global"
 )
 
 func init() {
@@ -38,16 +38,16 @@ func (ptb330) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	job := func() map[string]*float64 {
 		line, err = conn.ReadLine(input)
 		if err != nil {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrIO, Received: []byte(line), Err: err})
+			slog.Error("IO error while reading from PTB330 device", "error", err, "received", []byte(line))
 			return nil
 		}
 		if line[0] == '*' {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrDevice, Received: []byte(line), Err: err})
+			slog.Error("Device error from PTB330 device", "error", err, "received", []byte(line))
 			return nil
 		}
 		val := strings.TrimSpace(line)
 		if f, err := strconv.ParseFloat(val, 64); err != nil {
-			global.Log.Error(&connWrap.Error{Type: connWrap.ErrParse, Received: []byte(line), Err: err})
+			slog.Error("Parse error while converting value from PTB330 device", "error", err, "received", []byte(line))
 			return nil
 		} else {
 			tmpData["air_pressure"] = &f

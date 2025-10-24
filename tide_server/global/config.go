@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/smtp"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -66,13 +68,32 @@ func ReadConfig(name string) {
 		Smtp.Auth = smtp.PlainAuth("", Config.Smtp.Username, Config.Smtp.Password, Config.Smtp.Host)
 	}
 
-	var opts = slog.HandlerOptions{AddSource: true}
+	var level slog.Level
 	if Config.Debug {
-		opts.Level = slog.LevelDebug
+		level = slog.LevelDebug
 	} else {
-		opts.Level = slog.LevelInfo
+		level = slog.LevelInfo
+	}
+	_, filename, _, _ := runtime.Caller(0)
+	currentDir := filepath.Dir(filename)
+	projectDir := filepath.Dir(currentDir)
+	replace := func(groups []string, a slog.Attr) slog.Attr {
+		if a.Key == slog.TimeKey {
+			a.Value = slog.StringValue(a.Value.Time().Format("2006-01-02 15:04:05"))
+		}
+		// Remove the directory from the source's filename.
+		if a.Key == slog.SourceKey {
+			source := a.Value.Any().(*slog.Source)
+			rel, err := filepath.Rel(projectDir, source.File)
+			if err == nil {
+				source.File = rel
+			} else {
+				source.File = filepath.Base(source.File)
+			}
+		}
+		return a
 	}
 	// Create JSON format log handler, suitable for systemd integration
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &opts))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level, AddSource: true, ReplaceAttr: replace}))
 	slog.SetDefault(logger)
 }

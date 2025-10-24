@@ -3,13 +3,15 @@ package device
 import (
 	"encoding/json"
 	"errors"
-	"github.com/warthog618/go-gpiocdev"
+	"log/slog"
+	"os"
 	"syscall"
 	"tide/common"
 	"tide/pkg"
 	"tide/pkg/project"
-	"tide/tide_client/global"
 	"time"
+
+	"github.com/warthog618/go-gpiocdev"
 )
 
 func init() {
@@ -35,11 +37,12 @@ func (rg13) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 		}))
 	if err != nil {
 		if errors.Is(err, syscall.Errno(22)) {
-			global.Log.Error("Note that the WithPullUp option requires kernel V5.5 or later - check your kernel version.")
+			slog.Error("Note that the WithPullUp option requires kernel V5.5 or later - check your kernel version.")
 		}
-		global.Log.Fatalf("RequestLine returned error: %s\n", err)
+		slog.Error("RequestLine returned error", "error", err)
+		os.Exit(1)
 	}
-	global.Log.Debugf("watch on gpio pin: %v", conf.Pin)
+	slog.Debug("watch on gpio pin", "pin", conf.Pin)
 	project.RegisterReleaseFunc(func() { _ = ll.Close() })
 	return common.StringMapMap{conf.DeviceName: map[string]string{"rain_gauge": conf.ItemName}}
 }

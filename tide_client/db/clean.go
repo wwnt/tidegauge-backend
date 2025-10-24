@@ -3,21 +3,21 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"slices"
 )
 
 func CleanDBData(cutoffTime int64) {
 	tables, err := GetAllTables(db)
 	if err != nil {
-		log.Println(err)
+		slog.Error("Failed to get database tables", "error", err)
 		return
 	}
 	// Iterate over each table
 	for _, table := range tables {
 		valid, err := IsValidTable(db, table)
 		if err != nil {
-			log.Printf("Error validating table %s: %v", table, err)
+			slog.Error("Error validating table", "table", table, "error", err)
 			continue
 		}
 		if !valid {
@@ -25,7 +25,7 @@ func CleanDBData(cutoffTime int64) {
 		}
 
 		if err = DeleteOldData(db, table, cutoffTime); err != nil {
-			log.Printf("Error cleaning table %s: %v", table, err)
+			slog.Error("Error cleaning table", "table", table, "error", err)
 		}
 	}
 }
