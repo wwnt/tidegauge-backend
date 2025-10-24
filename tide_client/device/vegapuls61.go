@@ -3,11 +3,12 @@ package device
 import (
 	"encoding/binary"
 	"encoding/json"
-	"github.com/wwnt/modbus"
+	"log/slog"
 	"math"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
-	"tide/tide_client/global"
+
+	"github.com/wwnt/modbus"
 )
 
 func init() {
@@ -38,11 +39,11 @@ func (vegaPULS61) NewDevice(c any, rawConf json.RawMessage) map[string]map[strin
 		defer conn.Unlock() // must be locked to prevent simultaneous operations
 		results, err = client.ReadInputRegisters(2000, 4)
 		if err != nil {
-			global.Log.Error(err)
+			slog.Error("Error reading input registers from VEGAPULS61 device", "error", err)
 			return nil
 		}
 		if results[0] != 0 {
-			global.Log.Errorf("% x\n", results)
+			slog.Error("Non-zero result from VEGAPULS61 device", "results", results)
 			return nil
 		}
 		var val = float64(math.Float32frombits(binary.BigEndian.Uint32(results[4:])))

@@ -1,8 +1,9 @@
 package device
 
 import (
+	"log/slog"
+	"os"
 	"strings"
-	"tide/tide_client/global"
 )
 
 // getStringInBetween Returns empty string if no start string found
@@ -21,25 +22,31 @@ func getStringInBetween(str string, start string, end string) (result string) {
 
 func MergeInfo(dstInfo map[string]map[string]string, srcInfo map[string]map[string]string) {
 	if len(srcInfo) == 0 {
-		global.Log.Fatal("srcInfo length is 0")
+		slog.Error("srcInfo length is 0")
+		os.Exit(1)
 	}
 	for deviceName, srcItems := range srcInfo {
 		if deviceName == "" {
-			global.Log.Fatal("device_name is empty")
+			slog.Error("device_name is empty")
+			os.Exit(1)
 		}
 		if len(srcItems) == 0 {
-			global.Log.Fatal("srcItems length is 0")
+			slog.Error("srcItems length is 0")
+			os.Exit(1)
 		}
 		if dstItems, ok := dstInfo[deviceName]; ok {
 			for itemType, itemName := range srcItems {
 				if itemType == "" {
-					global.Log.Fatal("item_type is empty")
+					slog.Error("item_type is empty")
+					os.Exit(1)
 				}
 				if itemName == "" {
-					global.Log.Fatal("item_name is empty")
+					slog.Error("item_name is empty")
+					os.Exit(1)
 				}
 				if _, ok := dstItems[itemType]; ok {
-					global.Log.Fatal(itemType + " duplicate")
+					slog.Error(itemType + " duplicate")
+					os.Exit(1)
 				} else {
 					dstItems[itemType] = itemName
 				}

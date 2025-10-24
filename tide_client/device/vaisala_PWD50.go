@@ -2,7 +2,7 @@ package device
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"tide/common"
@@ -34,36 +34,36 @@ func (pwd50) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	var job = func() *float64 {
 		line, err = conn.ReadLine([]byte("\r\x05PW " + conf.Addr + " 0\r"))
 		if err != nil {
-			log.Printf("err: %v\n received: %s\n received hex: (% X)\n", err, pkg.Printable([]byte(line)), line)
+			slog.Error("Failed to read line from PWD50 device", "error", err, "received", pkg.Printable([]byte(line)), "received_hex", line)
 			return nil
 		}
 		if len(line) != 25 {
-			log.Printf("received: %s\n received hex: (% X)\n", pkg.Printable([]byte(line)), line)
+			slog.Error("Invalid line length received from PWD50 device", "received", pkg.Printable([]byte(line)), "received_hex", line, "length", len(line))
 			return nil
 		}
 		status := line[8]
 		if status != '0' {
-			log.Printf("status: %c\n", status)
+			slog.Error("PWD50 device returned non-zero status", "status", status)
 			recv, err := conn.CustomCommand([]byte("\r\x05PW " + conf.Addr + " 3\r"))
 			if err != nil {
-				log.Printf("err: %v\n received: %s\n", err, pkg.Printable(recv))
+				slog.Error("Failed to send custom command to PWD50 device", "error", err, "received", pkg.Printable(recv))
 			} else {
-				log.Printf("received: %s\n", pkg.Printable(recv))
+				slog.Info("Received response from PWD50 device", "received", pkg.Printable(recv))
 			}
 			return nil
 		}
 		val1 := strings.TrimSpace(line[9:16])
 		if len(val1) == 0 {
-			log.Printf("received: %s\n received hex: (% X)\n", pkg.Printable([]byte(line)), line)
+			slog.Error("Empty value received from PWD50 device", "received", pkg.Printable([]byte(line)), "received_hex", line)
 			return nil
 		}
 		if val1[0] == '/' {
-			log.Printf("received: %s\n received hex: (% X)\n", pkg.Printable([]byte(line)), line)
+			slog.Error("Invalid value format received from PWD50 device", "received", pkg.Printable([]byte(line)), "received_hex", line)
 			return nil
 		}
 		f, err := strconv.ParseFloat(val1, 64)
 		if err != nil {
-			log.Printf("err: %v\n received: %s\n received hex: (% X)\n", err, pkg.Printable([]byte(line)), line)
+			slog.Error("Failed to parse float value from PWD50 device", "error", err, "received", pkg.Printable([]byte(line)), "received_hex", line)
 			return nil
 		}
 		return &f

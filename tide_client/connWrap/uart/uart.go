@@ -2,13 +2,14 @@ package uart
 
 import (
 	"errors"
-	"go.bug.st/serial"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"sync/atomic"
 	"tide/tide_client/connWrap"
 	"time"
+
+	"go.bug.st/serial"
 )
 
 func getParity(parity string) serial.Parity {
@@ -70,9 +71,9 @@ func (c *Uart) reopenUntilSuccess() {
 	var err error
 	for {
 		if err = c.open(); err != nil {
-			log.Printf("connect to %s failed: %s\n", c.portName, err)
+			slog.Error("Failed to connect to UART port", "port", c.portName, "error", err)
 		} else {
-			log.Printf("connected to %s", c.portName)
+			slog.Info("Successfully connected to UART port", "port", c.portName)
 			break
 		}
 		time.Sleep(10 * time.Second)

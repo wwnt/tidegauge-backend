@@ -2,11 +2,11 @@ package device
 
 import (
 	"encoding/json"
+	"log/slog"
 	"math"
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
-	"tide/tide_client/global"
 )
 
 func init() {
@@ -44,7 +44,7 @@ func (arduino) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		var job = func() *float64 {
 			val, err := conn.AnalogRead(item.Pin)
 			if err != nil {
-				global.Log.Error(err)
+				slog.Error("Error reading analog value from Arduino device", "error", err)
 				return nil
 			}
 			var f = math.Round(float64(val)/1023*5*1000) / 1000
