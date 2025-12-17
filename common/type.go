@@ -2,8 +2,9 @@ package common
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
 	"tide/pkg/custype"
+
+	"github.com/google/uuid"
 )
 
 type Status = string
@@ -45,11 +46,6 @@ type DataTimeStruct struct {
 type ItemNameDataTimeStruct struct {
 	ItemName string `json:"item_name"`
 	DataTimeStruct
-}
-
-type PortTerminalStruct struct {
-	DeviceName string `json:"device_name"`
-	Command    string `json:"command"`
 }
 
 type StatusChangeStruct struct {

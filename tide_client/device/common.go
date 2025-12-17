@@ -8,13 +8,11 @@ import (
 	"sync/atomic"
 	"tide/common"
 	"tide/pkg"
-	"tide/tide_client/connWrap"
 	"tide/tide_client/global"
 )
 
 var (
-	DataReceive     = make(chan []itemData, 2000)
-	DevicesUartConn = make(map[string]*connWrap.ConnUtil)
+	DataReceive = make(chan []itemData, 2000)
 
 	devicesMu sync.RWMutex
 	devices   = make(map[string]any)

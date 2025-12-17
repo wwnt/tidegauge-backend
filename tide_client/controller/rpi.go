@@ -14,7 +14,7 @@ import (
 
 func addRpiStatus(dataPub *pubsub.PubSub) {
 	if _, err := rpiStat(); err == nil {
-		_, err = global.CronJob.AddFunc("@every 20s",
+		_, err = global.CronJob.AddFunc("@every 60s",
 			func() {
 				data, err := rpiStat()
 				if err != nil {

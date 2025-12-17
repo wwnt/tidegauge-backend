@@ -25,7 +25,6 @@ func (pwd50) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		Cron       string `json:"cron"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
-	DevicesUartConn[conf.DeviceName] = conn
 
 	var (
 		err  error

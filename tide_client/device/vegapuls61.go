@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"math"
+	"strconv"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
 
@@ -46,9 +47,20 @@ func (vegaPULS61) NewDevice(c any, rawConf json.RawMessage) map[string]map[strin
 			slog.Error("Non-zero result from VEGAPULS61 device", "results", results)
 			return nil
 		}
-		var val = float64(math.Float32frombits(binary.BigEndian.Uint32(results[4:])))
+		var val = Float32To64(math.Float32frombits(binary.BigEndian.Uint32(results[4:])))
 		return &val
 	}
 	AddCronJobWithOneItem(conf.Cron, conf.ItemName, job)
 	return map[string]map[string]string{conf.DeviceName: {"water_distance": conf.ItemName}}
+}
+func Float32To64(val float32) float64 {
+	// 1. 将 float32 转为字符串
+	// 'g' 标记表示使用最紧凑的格式（指数或常规）
+	// -1 表示让 strconv 自动决定需要的最小小数位
+	// 32 表示这个数来源于 float32（这是关键，它会过滤掉 float32 精度之外的噪声）
+	str := strconv.FormatFloat(float64(val), 'g', -1, 32)
+
+	// 2. 将字符串解析为 float64
+	res, _ := strconv.ParseFloat(str, 64)
+	return res
 }

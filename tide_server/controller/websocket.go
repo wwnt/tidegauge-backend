@@ -1,9 +1,6 @@
 package controller
 
 import (
-	"encoding/json"
-	"io"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -15,7 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/hashicorp/yamux"
 )
 
 const (
@@ -26,69 +22,7 @@ const (
 var (
 	wsUnauthorized        = websocket.FormatCloseMessage(4001, http.StatusText(http.StatusUnauthorized))
 	wsInternalServerError = websocket.FormatCloseMessage(4002, http.StatusText(http.StatusInternalServerError))
-	wsStationDisconnected = websocket.FormatCloseMessage(4003, "Station Disconnected")
 )
-
-func PortTerminalWebsocket(c *gin.Context) {
-	wsw := c.MustGet(contextKeyWsConn).(wsutil.WsWrap)
-
-	s, ok := c.GetQuery("station_id")
-	if !ok {
-		return
-	}
-	stationId, err := uuid.Parse(s)
-	if err != nil {
-		return
-	}
-	value, ok := recvConnections.Load(stationId)
-	if !ok {
-		_ = wsw.WriteControl(websocket.CloseMessage, wsStationDisconnected, time.Now().Add(writeWait))
-		return
-	}
-	stationConn, err := value.(*yamux.Session).Open()
-	if err != nil {
-		slog.Error("Failed to open port terminal connection", "station_id", stationId, "error", err)
-		return
-	}
-	defer func() {
-		_ = stationConn.Close()
-	}()
-
-	if _, err := stationConn.Write([]byte{common.MsgPortTerminal}); err != nil {
-		slog.Error("Failed to write port terminal message", "station_id", stationId, "error", err)
-		return
-	}
-
-	go wsw.Ping(c.Request.Context().Done())
-	// writer
-	go func() {
-		var err error
-		stationDecoder := json.NewDecoder(stationConn)
-		for {
-			var msg json.RawMessage
-			if err = stationDecoder.Decode(&msg); err != nil {
-				if err != io.EOF {
-					slog.Error("Port terminal connection decode error", "station_id", stationId, "error", err)
-				}
-				_ = wsw.WriteControl(websocket.CloseMessage, wsStationDisconnected, time.Now().Add(writeWait))
-				return
-			}
-			if err = wsw.WriteMessage(websocket.TextMessage, msg); err != nil {
-				return
-			}
-		}
-	}()
-	// reader
-	for {
-		_, p, err := wsw.ReadMessage()
-		if err != nil {
-			return
-		}
-		if _, err = stationConn.Write(p); err != nil {
-			return
-		}
-	}
-}
 
 func DataWebsocket(c *gin.Context) {
 	var (
