@@ -69,10 +69,11 @@ create table upstream_stations
 
 create table users
 (
-    username    varchar                not null primary key,
-    role        smallint default 0     not null,
-    email       citext   default ''    not null,
-    live_camera boolean  default false not null
+    username      varchar                not null primary key,
+    password_hash text     default ''    not null,
+    role          smallint default 0     not null,
+    email         citext   default ''    not null,
+    live_camera   boolean  default false not null
 );
 
 create table permissions_item_data
@@ -108,8 +109,8 @@ create table rpi_status_log
     timestamp  timestamptz      not null
 );
 
-insert into users(username, role, live_camera)
-VALUES ('tgm-admin', 2, true);
+insert into users(username, role, live_camera, password_hash)
+VALUES ('tgm-admin', 2, true, '$argon2id$v=19$m=7168,t=5,p=1$1AiO4aIwfRRNwUCPyXDPcQ$0MBbcUwAFanJZFmEim7vOH6V0WNJ4sRgU+OW5Z1rDFU');
 
 create table station_info_gloss_all
 (

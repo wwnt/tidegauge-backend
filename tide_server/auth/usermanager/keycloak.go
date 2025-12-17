@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/Nerzal/gocloak/v13"
-	"github.com/jackc/pgx/v5/pgconn"
 	"net/http"
 	"net/url"
 	"strings"
 	"tide/tide_server/auth"
+
+	"github.com/Nerzal/gocloak/v13"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Keycloak struct {
@@ -27,9 +28,8 @@ func (k *Keycloak) CheckUserPwd(username, password string) bool {
 	_, err := k.client.Login(ctx, k.clientId, k.clientSecret, k.realm, username, password)
 	if err == nil {
 		return true
-	} else {
-		return false
 	}
+	return false
 }
 
 func (k *Keycloak) Login(r *http.Request, w http.ResponseWriter) {
@@ -89,55 +89,23 @@ func (k *Keycloak) GetLoginUser(r *http.Request) (string, error) {
 }
 
 func (k *Keycloak) ListUsers(condition int, role int) (users []auth.User, err error) {
-	var rows *sql.Rows
-	switch condition {
-	case -1:
-		rows, err = k.db.Query("select username, role, email, live_camera from users where role <= $1", role)
-	case 0:
-		rows, err = k.db.Query("select username, role, email, live_camera from users where role = $1", role)
-	case 1:
-		rows, err = k.db.Query("select username, role, email, live_camera from users where role >= $1", role)
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var user auth.User
-	for rows.Next() {
-		err = rows.Scan(&user.Username, &user.Role, &user.Email, &user.LiveCamera)
-		if err != nil {
-			return nil, err
-		}
-		users = append(users, user)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return users, nil
+	return listUsersFromDB(k.db, condition, role)
 }
 func (k *Keycloak) getKcUserByUsername(ctx context.Context, username string) (gocloak.User, error) {
 	var exact = true
 	kcUsers, err := k.client.GetUsers(ctx, k.token.AccessToken, k.realm, gocloak.GetUsersParams{Username: &username, Exact: &exact})
 	if err != nil {
 		return gocloak.User{}, err
-	} else {
-		for _, kcUser := range kcUsers {
-			if *kcUser.Username == username {
-				return *kcUser, nil
-			}
-		}
-		return gocloak.User{}, auth.ErrUserNotFound
 	}
+	for _, kcUser := range kcUsers {
+		if *kcUser.Username == username {
+			return *kcUser, nil
+		}
+	}
+	return gocloak.User{}, auth.ErrUserNotFound
 }
 func (k *Keycloak) GetUser(username string) (auth.User, error) {
-	var user auth.User
-	err := k.db.QueryRow("select username, role, email, live_camera from users where username=$1", username).Scan(&user.Username, &user.Role, &user.Email, &user.LiveCamera)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return user, auth.ErrUserNotFound
-		}
-	}
-	return user, err
+	return getUserFromDB(k.db, username)
 }
 
 func (k *Keycloak) AddUser(user auth.User) error {

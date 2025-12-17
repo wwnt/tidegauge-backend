@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"crypto/rand"
 	"log/slog"
 	"net/http/pprof"
 	"os"
@@ -52,15 +53,26 @@ func Init() {
 		}
 	}()
 
-	userManager = usermanager.NewKeycloak(
-		db.TideDB,
-		global.Config.Keycloak.BasePath,
-		global.Config.Keycloak.MasterUsername,
-		global.Config.Keycloak.MasterPassword,
-		global.Config.Keycloak.Realm,
-		global.Config.Keycloak.ClientId,
-		global.Config.Keycloak.ClientSecret,
-	)
+	if global.Config.Keycloak.BasePath != "" {
+		userManager = usermanager.NewKeycloak(
+			db.TideDB,
+			global.Config.Keycloak.BasePath,
+			global.Config.Keycloak.MasterUsername,
+			global.Config.Keycloak.MasterPassword,
+			global.Config.Keycloak.Realm,
+			global.Config.Keycloak.ClientId,
+			global.Config.Keycloak.ClientSecret,
+		)
+	} else {
+		key := make([]byte, 32)
+		_, _ = rand.Read(key)
+		userManager = usermanager.NewJwt(
+			db.TideDB,
+			key,
+			"navi-tech.net",
+			time.Duration(global.Config.Jwt.Expire)*time.Second,
+		)
+	}
 
 	authorization = permission.NewPostgres(db.TideDB)
 

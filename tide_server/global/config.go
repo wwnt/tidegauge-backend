@@ -31,6 +31,9 @@ var Config struct {
 		ClientId       string `json:"client_id"`
 		ClientSecret   string `json:"client_secret"`
 	} `json:"keycloak"`
+	Jwt struct {
+		Expire time.Duration `json:"expire"`
+	} `json:"jwt"`
 	Db struct {
 		Tide pgConfigStruct `json:"tide"`
 		Sea  pgConfigStruct `json:"sea"`

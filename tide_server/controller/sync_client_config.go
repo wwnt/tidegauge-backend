@@ -30,9 +30,9 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 		slog.Error("Failed to decode stations full info", "error", err)
 		return
 	}
-	newStations := make(map[string]db.StationFullInfo)
+	newStations := make(map[uuid.UUID]db.StationFullInfo)
 	for _, stationFull := range newSs {
-		newStations[stationFull.Identifier] = stationFull
+		newStations[stationFull.Id] = stationFull
 		oldDs, err := db.GetDevices(stationFull.Id) // old devices
 		if err != nil {
 			slog.Error("Failed to get devices", "station_id", stationFull.Id, "error", err)
@@ -111,7 +111,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 		}
 	}
 	for _, station := range oldSs {
-		if _, ok := newStations[station.Identifier]; !ok {
+		if _, ok := newStations[station.Id]; !ok {
 			if n, err := db.DelUpstreamStation(upstream.config.Id, station.Id); err != nil {
 				slog.Error("Failed to delete upstream station", "upstream_id", upstream.config.Id, "station_id", station.Id, "error", err)
 				return
