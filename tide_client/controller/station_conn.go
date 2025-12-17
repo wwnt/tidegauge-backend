@@ -8,7 +8,6 @@ import (
 	"tide/common"
 	"tide/pkg/pubsub"
 	"tide/tide_client/db"
-	"tide/tide_client/device"
 	"tide/tide_client/device/camera"
 	"tide/tide_client/global"
 	"time"
@@ -130,8 +129,6 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 					return
 				}
 				switch buf[0] {
-				case common.MsgPortTerminal:
-					portTerminal(stream)
 				case common.MsgCameraSnapShot:
 					cameraSnapshot(stream)
 				default:
@@ -141,37 +138,6 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 	}()
 	// close the session if stream1 is closed
 	_, _ = io.Copy(io.Discard, stream1)
-}
-
-func portTerminal(conn net.Conn) {
-	var err error
-	decoder := json.NewDecoder(conn)
-	encoder := json.NewEncoder(conn)
-	for {
-		var msg common.PortTerminalStruct
-		if err = decoder.Decode(&msg); err != nil {
-			slog.Error("Failed to decode terminal message", "error", err)
-			return
-		}
-		slog.Debug("Terminal message", "device_name", msg.DeviceName, "command", msg.Command)
-		deviceConn, ok := device.DevicesUartConn[msg.DeviceName]
-		if !ok {
-			//dataReceiveMu.Unlock()
-			return
-		}
-		// Exclusive access to this connection
-		received, err := deviceConn.CustomCommand([]byte(msg.Command))
-
-		if err != nil {
-			received = []byte(err.Error())
-			slog.Error("Failed to execute device command", "device_name", msg.DeviceName, "command", msg.Command, "error", err)
-			continue
-		}
-		if err = encoder.Encode(string(received)); err != nil {
-			slog.Error("Failed to encode response data", "error", err)
-			return
-		}
-	}
 }
 
 func cameraSnapshot(conn net.Conn) {

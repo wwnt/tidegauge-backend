@@ -20,7 +20,7 @@
 /tide_client/data.db
 
 /tide_server/tide_server
-/tide_server/config.json
+/tide_server/*.json
 /tide_server/docker-compose.yml
 
 /uart-tcp-forward/uart-tcp-forward

@@ -27,7 +27,6 @@ func (ptb330) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		Items      map[string]string `json:"items"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
-	DevicesUartConn[conf.DeviceName] = conn
 
 	var (
 		err     error
@@ -48,7 +47,7 @@ func (ptb330) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		val := strings.TrimSpace(line)
 		if f, err := strconv.ParseFloat(val, 64); err != nil {
 			slog.Error("Parse error while converting value from PTB330 device", "error", err, "received", []byte(line))
-			return nil
+			tmpData["air_pressure"] = nil
 		} else {
 			tmpData["air_pressure"] = &f
 		}

@@ -27,7 +27,6 @@ func (wmt700) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		Items      map[string]string `json:"items"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
-	DevicesUartConn[conf.DeviceName] = conn
 
 	var (
 		err     error

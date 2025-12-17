@@ -4,9 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/google/uuid"
 	"tide/common"
 	"tide/pkg/custype"
+
+	"github.com/google/uuid"
 )
 
 type Station struct {

@@ -8,10 +8,9 @@ const (
 )
 
 const (
-	MsgData MsgType = iota
-	MsgGpioData
-	MsgRpiStatus
-	MsgItemStatus
-	MsgPortTerminal
-	MsgCameraSnapShot
+	MsgData           MsgType = 0
+	MsgGpioData       MsgType = 1
+	MsgRpiStatus      MsgType = 2
+	MsgItemStatus     MsgType = 3
+	MsgCameraSnapShot MsgType = 5
 )
