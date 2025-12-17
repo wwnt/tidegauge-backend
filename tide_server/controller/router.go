@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 	"time"
 
 	"tide/pkg/wsutil"
@@ -33,7 +34,6 @@ func setupRouter() *gin.Engine {
 	r.GET("/IOCHistory", IOCHistory)
 
 	r.GET("/ws/global", upgradeWs, validateWs, GlobalWebsocket)
-	r.GET("/ws/portTerminal", upgradeWs, validateWs, validateWsSuperAdmin, PortTerminalWebsocket)
 	r.GET("/ws/data", upgradeWs, validateWs, DataWebsocket)
 
 	r.POST("/applyAccount", ApplyAccount)
@@ -86,11 +86,13 @@ func SlogLogger(c *gin.Context) {
 	defer func() {
 		if err := recover(); err != nil {
 			httpRequest, _ := httputil.DumpRequest(c.Request, false)
+			username := c.GetString(contextKeyUsername)
 
 			slog.Error("Request panic",
 				"path", c.Request.URL.Path,
 				"error", err,
 				"request", string(httpRequest),
+				"username", username,
 			)
 			c.AbortWithStatus(http.StatusInternalServerError)
 		}
@@ -99,21 +101,26 @@ func SlogLogger(c *gin.Context) {
 	c.Next()
 
 	if len(c.Errors) > 0 {
+		username := c.GetString(contextKeyUsername)
 		slog.Error("Request error",
 			"path", c.Request.URL.Path,
 			"query", c.Request.URL.RawQuery,
 			"error", c.Errors.String(),
+			"username", username,
 		)
 	}
 
 	if global.Config.Debug {
-		if _, ok := skipPaths[c.Request.URL.Path]; !ok {
+		pathKey := strings.TrimPrefix(c.Request.URL.Path, "/")
+		if _, ok := skipPaths[pathKey]; !ok {
 			latency := time.Since(start)
+			username := c.GetString(contextKeyUsername)
 			slog.Debug("HTTP request",
 				"path", c.Request.URL.Path,
 				"status", c.Writer.Status(),
 				"method", c.Request.Method,
 				"latency", latency,
+				"username", username,
 			)
 		}
 	}
@@ -132,11 +139,9 @@ func validateWs(c *gin.Context) {
 	if err != nil {
 		_ = ws.WriteControl(websocket.CloseMessage, wsInternalServerError, time.Now().Add(writeWait))
 		c.Abort()
-		return
 	} else if username == "" {
 		_ = ws.WriteControl(websocket.CloseMessage, wsUnauthorized, time.Now().Add(writeWait))
 		c.Abort()
-		return
 	} else {
 		user, err := userManager.GetUser(username)
 		if err != nil {
@@ -155,7 +160,7 @@ func validateWs(c *gin.Context) {
 func validate(c *gin.Context) {
 	username, err := userManager.GetLoginUser(c.Request)
 	if err != nil {
-		c.AbortWithStatus(http.StatusInternalServerError)
+		_ = c.AbortWithError(http.StatusInternalServerError, err)
 	} else if username == "" {
 		c.AbortWithStatus(http.StatusUnauthorized)
 	} else {
@@ -172,13 +177,6 @@ func validate(c *gin.Context) {
 		if user.Role == auth.NormalUser {
 			c.Set(contextKeyLiveCamera, user.LiveCamera)
 		}
-	}
-}
-
-func validateWsSuperAdmin(c *gin.Context) {
-	if c.GetInt(contextKeyRole) < auth.SuperAdmin {
-		_ = c.MustGet(contextKeyWsConn).(wsutil.WsWrap).WriteControl(websocket.CloseMessage, wsUnauthorized, time.Now().Add(writeWait))
-		c.Abort()
 	}
 }
 

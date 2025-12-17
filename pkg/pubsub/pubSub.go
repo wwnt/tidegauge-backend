@@ -22,7 +22,7 @@ type PubSub struct {
 
 // NewSubscriber creates a new subscriber. When the closeChan signal is received, it closes the connection.
 func NewSubscriber(closeChan <-chan struct{}, conn io.WriteCloser) Subscriber {
-	ch := make(BytesChan, 10000000)
+	ch := make(BytesChan, 10000)
 	go func() {
 		defer func() { _ = conn.Close() }()
 		var (
