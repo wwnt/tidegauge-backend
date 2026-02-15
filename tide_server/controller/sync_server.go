@@ -181,6 +181,7 @@ func fullSyncConfigServer(conn net.Conn) {
 func syncDataServer(username string, session *yamux.Session, permTopic pubsub.TopicMap, permissions common.UUIDStringsMap) (retOk bool) {
 	stream3, err := session.Accept()
 	if err != nil {
+		slog.Error("Failed to accept session", "error", err)
 		return
 	}
 	defer func() { _ = stream3.Close() }()
@@ -198,6 +199,7 @@ func syncDataServer(username string, session *yamux.Session, permTopic pubsub.To
 
 	stream4, err := session.Accept()
 	if err != nil {
+		slog.Error("Failed to accept session", "error", err)
 		return
 	}
 
