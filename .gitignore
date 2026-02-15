@@ -1,3 +1,7 @@
+.idea
+.claude
+.vscode
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -14,16 +18,14 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-/.idea/
+tide_client/tide_client
+tide_client/data.db
 
-/tide_client/tide_client
-/tide_client/data.db
+tide_server/tide_server
+tide_server/*.json
+tide_server/docker-compose.yml
 
-/tide_server/tide_server
-/tide_server/*.json
-/tide_server/docker-compose.yml
-
-/uart-tcp-forward/uart-tcp-forward
+uart-tcp-forward/uart-tcp-forward
 
 _*
 

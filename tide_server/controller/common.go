@@ -70,7 +70,7 @@ func Init() {
 			db.TideDB,
 			key,
 			"navi-tech.net",
-			time.Duration(global.Config.Jwt.Expire)*time.Second,
+			global.Config.Jwt.Expire*time.Second,
 		)
 	}
 

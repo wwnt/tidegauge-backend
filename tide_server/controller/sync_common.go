@@ -25,7 +25,7 @@ const (
 	kMsgDelItem               = "DelItem"
 	kMsgEditDeviceRecord      = "EditDeviceRecord"
 	kMsgUpdateAvailable       = "update_available"
-	kMsgUpdateStationStatus   = "update_station_status"
+	kMsgUpdateStationStatus   = "UpdateStationStatus"
 	kMsgMissItemStatus        = "MissItemStatus"
 	kMsgUpdateItemStatus      = "UpdateItemStatus"
 	kMsgMissData              = "MissData"

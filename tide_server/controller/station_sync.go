@@ -40,7 +40,6 @@ func handleStationConn(conn net.Conn) {
 			slog.Error("Station connection panic", "remote", conn.RemoteAddr().String(), "error", err)
 		}
 		_ = conn.Close()
-		slog.Info("Station connection closed", "remote", conn.RemoteAddr().String())
 	}()
 	cnf := yamux.DefaultConfig()
 	cnf.KeepAliveInterval = 100 * time.Second
@@ -69,6 +68,9 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 		slog.Debug("Failed to decode station info", "identifier", info.Identifier, "error", err)
 		return
 	}
+	defer func() {
+		slog.Info("Station connection closed", "identifier", info.Identifier, "remote", conn.RemoteAddr().String())
+	}()
 	stationId, err := db.GetLocalStationIdByIdentifier(info.Identifier)
 	if err != nil {
 		slog.Info("Station not created", "identifier", info.Identifier, "remote", conn.RemoteAddr().String())
