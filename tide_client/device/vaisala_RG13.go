@@ -1,3 +1,5 @@
+//go:build linux
+
 package device
 
 import (
@@ -33,7 +35,7 @@ func (rg13) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 	ll, err := gpio.RequestLines([]int{conf.Pin}, gpiocdev.WithPullUp, gpiocdev.WithRisingEdge,
 		gpiocdev.WithDebounce(time.Millisecond*10),
 		gpiocdev.WithEventHandler(func(evt gpiocdev.LineEvent) {
-			DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &val}}
+			DataReceive <- []itemData{{At: nowMs(), Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &val}}
 		}))
 	if err != nil {
 		if errors.Is(err, syscall.Errno(22)) {

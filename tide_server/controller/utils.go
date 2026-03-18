@@ -8,7 +8,7 @@ import (
 )
 
 func addAuthorization(req *http.Request, token string) {
-	req.Header.Set("Authorization", fmt.Sprintf("%s %s", "bearer", token))
+	req.Header.Set("Authorization", fmt.Sprintf("%s %s", "Bearer", token))
 }
 
 func addJsonContentHeader(req *http.Request) {
@@ -19,12 +19,12 @@ func addPostFormContentHeader(req *http.Request) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 }
 
-func uuidStringsMapToTopic(permissions common.UUIDStringsMap) pubsub.TopicMap {
-	var topic = make(pubsub.TopicMap)
+func uuidStringsMapToTopics(permissions common.UUIDStringsMap) pubsub.TopicSet {
+	var permissionTopics = make(pubsub.TopicSet)
 	for sid, items := range permissions {
 		for _, item := range items {
-			topic[common.StationItemStruct{StationId: sid, ItemName: item}] = struct{}{}
+			permissionTopics[common.StationItemStruct{StationId: sid, ItemName: item}] = struct{}{}
 		}
 	}
-	return topic
+	return permissionTopics
 }

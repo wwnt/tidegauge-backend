@@ -8,37 +8,74 @@ import (
 	"sync"
 	"time"
 
+	"tide/internal/upstreamauth"
 	"tide/tide_server/db"
+	"tide/tide_server/global"
+	syncv2relay "tide/tide_server/syncv2/relay"
 
 	"github.com/hashicorp/yamux"
-	"golang.org/x/oauth2"
 )
 
 // recvConnections is connections with upstream or tide gauge. Used to get data.
 var recvConnections sync.Map
 
-type upstreamStorage struct {
+type upstreamSyncState struct {
 	config     db.Upstream
-	httpClient *http.Client
+	httpClient *upstreamauth.Client
 	ctx        context.Context
-	cancelF    context.CancelFunc
+	cancel     context.CancelFunc
 }
 
-func startSync(upstreamConfig db.Upstream) {
+func startSync(upstreamCfg db.Upstream) {
 	ctx, cancel := context.WithCancel(context.Background())
-	httpClient := oauth2.NewClient(ctx, &tokenSrc{ctx, upstreamConfig})
-	upstream := &upstreamStorage{
-		config:     upstreamConfig,
-		httpClient: httpClient,
-		ctx:        ctx,
-		cancelF:    cancel,
+	httpClient := &http.Client{}
+	authClient, authErr := upstreamauth.NewClient(upstreamauth.Config{
+		BaseURL:      upstreamCfg.Url,
+		Username:     upstreamCfg.Username,
+		Password:     upstreamCfg.Password,
+		LoginPath:    loginPath,
+		LoginTimeout: 10 * time.Second,
+		HTTPClient:   httpClient,
+	})
+	if authErr != nil {
+		slog.Error("Failed to init upstream auth client", "upstream_id", upstreamCfg.Id, "url", upstreamCfg.Url, "error", authErr)
 	}
-	recvConnections.Store(upstreamConfig.Id, upstream) // store first
+
+	upstream := &upstreamSyncState{
+		config:     upstreamCfg,
+		httpClient: authClient,
+		ctx:        ctx,
+		cancel:     cancel,
+	}
+	recvConnections.Store(upstreamCfg.Id, upstream) // store first
+
+	if global.Config.SyncV2.Enabled {
+		fetchUpstreamLoopV2(upstream)
+		return
+	}
 
 	fetchUpstreamLoop(upstream)
 }
 
-func fetchUpstreamLoop(upstream *upstreamStorage) {
+func fetchUpstreamLoopV2(upstream *upstreamSyncState) {
+	syncv2relay.RunDownstreamWithRetry(
+		upstream.ctx,
+		relayDownstreamConfig(upstream),
+		relayDownstreamDeps(upstream),
+		10*time.Second,
+		func(err error) {
+			if err != nil {
+				slog.Debug("v2 下游同步断开，准备重连", "url", upstream.config.Url, "error", err)
+			}
+			// 断开后清理可用 items (保持现有语义)
+			if err := db.RemoveAvailableByUpstreamId(upstream.config.Id); err != nil {
+				slog.Error("Failed to remove available items by upstream ID", "upstream_id", upstream.config.Id, "error", err)
+			}
+		},
+	)
+}
+
+func fetchUpstreamLoop(upstream *upstreamSyncState) {
 	for {
 		dialUpstream(upstream)
 		select {
@@ -49,17 +86,15 @@ func fetchUpstreamLoop(upstream *upstreamStorage) {
 	}
 }
 
-func dialUpstream(upstream *upstreamStorage) {
-	req, err := http.NewRequestWithContext(upstream.ctx, http.MethodPost, upstream.config.Url+syncPath, nil)
-	if err != nil {
-		slog.Error("Failed to create sync request", "url", upstream.config.Url, "error", err)
+func dialUpstream(upstream *upstreamSyncState) {
+	if upstream.httpClient == nil {
+		slog.Debug("Upstream auth client unavailable", "url", upstream.config.Url)
 		return
 	}
-	// net/http/response.go: func isProtocolSwitchResponse()
-	req.Header.Set("Connection", "Upgrade")
-	req.Header.Set("Upgrade", "websocket")
 
-	resp, err := upstream.httpClient.Do(req)
+	resp, err := upstream.httpClient.DoWithAuth(upstream.ctx, func(token string) (*http.Request, error) {
+		return newSyncUpgradeRequest(upstream.ctx, upstream.config.Url+syncPath, token)
+	})
 	if err != nil {
 		slog.Debug("Upstream connection failed", "url", upstream.config.Url, "error", err)
 		return
@@ -72,6 +107,10 @@ func dialUpstream(upstream *upstreamStorage) {
 		slog.Debug("Upstream authentication failed", "url", upstream.config.Url, "status", "unauthorized")
 		return
 	}
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		slog.Debug("Unexpected upstream sync status", "url", upstream.config.Url, "status", resp.StatusCode)
+		return
+	}
 	slog.Debug("Sync client connected", "url", upstream.config.Url)
 
 	conn, ok := resp.Body.(io.ReadWriteCloser)
@@ -82,7 +121,19 @@ func dialUpstream(upstream *upstreamStorage) {
 	handleSyncClientConn(conn, upstream)
 }
 
-func handleSyncClientConn(conn io.ReadWriteCloser, upstream *upstreamStorage) {
+func newSyncUpgradeRequest(ctx context.Context, syncURL, bearerToken string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, syncURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	// net/http/response.go: func isProtocolSwitchResponse()
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Upgrade", "websocket")
+	addAuthorization(req, bearerToken)
+	return req, nil
+}
+
+func handleSyncClientConn(conn io.ReadWriteCloser, upstream *upstreamSyncState) {
 	cnf := yamux.DefaultConfig()
 	cnf.EnableKeepAlive = false
 	cnf.ConnectionWriteTimeout = 120 * time.Second
@@ -140,18 +191,4 @@ func handleSyncClientConn(conn io.ReadWriteCloser, upstream *upstreamStorage) {
 	}()
 
 	incrementSyncConfigClient(stream1, upstream)
-}
-
-type tokenSrc struct {
-	ctx context.Context
-	db.Upstream
-}
-
-func (ts *tokenSrc) Token() (*oauth2.Token, error) {
-	oauth2Config := &oauth2.Config{
-		Endpoint: oauth2.Endpoint{
-			TokenURL: ts.Url + loginPath,
-		},
-	}
-	return oauth2Config.PasswordCredentialsToken(ts.ctx, ts.Username, ts.Password)
 }

@@ -2,28 +2,44 @@ package db
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 	"log"
 	"os"
 	"testing"
+
 	"tide/common"
 	"tide/pkg/custype"
 	"tide/tide_server/global"
 	"tide/tide_server/test"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("TIDE_RUN_INTEGRATION_TESTS") == "" {
+		// DB tests require a real Postgres. Keep them opt-in so unit test runs don't depend on external services.
+		os.Exit(0)
+	}
+
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	global.ReadConfig("../config.test.json")
-	test.InitDB()
+	cleanupDB, err := test.InitDB()
+	if err != nil {
+		log.Fatal(err)
+	}
 	Init()
 
 	exitCode := m.Run()
 
 	CloseDB()
+	cleanupDB()
 	os.Exit(exitCode)
+}
+
+func TestDBSuite(t *testing.T) {
+	suite.Run(t, new(dbSuite))
 }
 
 var (
@@ -41,7 +57,15 @@ var (
 	station1StatusLogs     []common.RowIdItemStatusStruct
 )
 
-func initData(t *testing.T) {
+type dbSuite struct {
+	suite.Suite
+}
+
+func (s *dbSuite) SetupTest() {
+	seedData(s.T())
+}
+
+func seedData(t *testing.T) {
 	_, err := TideDB.Exec(`
 truncate table devices restart identity cascade;
 truncate table device_record restart identity cascade;
@@ -171,6 +195,7 @@ drop table if exists item1 cascade;
 
 	upstream2 = upstream1
 	upstream2.Id = 0
+	upstream2.Url = "http://localhost:7200"
 
 	err = EditUpstream(&upstream2)
 	require.NoError(t, err)
@@ -198,11 +223,11 @@ drop table if exists item1 cascade;
 	station1StatusLogs = []common.RowIdItemStatusStruct{
 		{RowId: 1, ItemStatusStruct: common.ItemStatusStruct{
 			ItemName:           item1.Name,
-			StatusChangeStruct: common.StatusChangeStruct{Status: common.Normal, ChangedAt: custype.TimeMillisecond(1000)},
+			StatusChangeStruct: common.StatusChangeStruct{Status: common.Normal, ChangedAt: custype.UnixMs(1000)},
 		}},
 		{RowId: 2, ItemStatusStruct: common.ItemStatusStruct{
 			ItemName:           item1.Name,
-			StatusChangeStruct: common.StatusChangeStruct{Status: common.Abnormal, ChangedAt: custype.TimeMillisecond(1100)},
+			StatusChangeStruct: common.StatusChangeStruct{Status: common.Abnormal, ChangedAt: custype.UnixMs(1100)},
 		}},
 	}
 

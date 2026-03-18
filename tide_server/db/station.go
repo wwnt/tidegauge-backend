@@ -11,16 +11,16 @@ import (
 )
 
 type Station struct {
-	Id              uuid.UUID               `json:"id,omitempty"`
-	Identifier      string                  `json:"identifier,omitempty" binding:"required"`
-	Name            string                  `json:"name,omitempty"`
-	IpAddr          string                  `json:"ip_addr,omitempty"`
-	Location        json.RawMessage         `json:"location,omitempty"`
-	Partner         json.RawMessage         `json:"partner,omitempty"`
-	Cameras         json.RawMessage         `json:"cameras,omitempty"`
-	Status          common.Status           `json:"status,omitempty"`
-	StatusChangedAt custype.TimeMillisecond `json:"status_changed_at,omitempty"`
-	Upstream        bool                    `json:"upstream"`
+	Id              uuid.UUID       `json:"id,omitempty"`
+	Identifier      string          `json:"identifier,omitempty" binding:"required"`
+	Name            string          `json:"name,omitempty"`
+	IpAddr          string          `json:"ip_addr,omitempty"`
+	Location        json.RawMessage `json:"location,omitempty"`
+	Partner         json.RawMessage `json:"partner,omitempty"`
+	Cameras         json.RawMessage `json:"cameras,omitempty"`
+	Status          common.Status   `json:"status,omitempty"`
+	StatusChangedAt custype.UnixMs  `json:"status_changed_at,omitempty"`
+	Upstream        bool            `json:"upstream"`
 }
 
 func GetLocalStationIdByIdentifier(identifier string) (uuid.UUID, error) {
@@ -72,12 +72,12 @@ func EditStation(s *Station) (err error) {
 			if s.Id, err = uuid.NewUUID(); err != nil {
 				return err
 			}
-			_, err = tx.Exec(`insert into stations(id,identifier,name,location,partner,upstream) VALUES ($1,$2,$3,$4,$5,false)`, s.Id, s.Identifier, s.Name, s.Location, s.Partner)
+			_, err = tx.Exec(`insert into stations(id,identifier,name,location,partner,upstream) VALUES ($1,$2,$3,coalesce($4,'null'::jsonb),coalesce($5,'null'::jsonb),false)`, s.Id, s.Identifier, s.Name, s.Location, s.Partner)
 		} else {
 			if deletedAt == nil {
 				return errors.New("already has the same identifier")
 			}
-			_, err = tx.Exec(`update stations set name=$2,location=$3,partner=$4,upstream=false,deleted_at=null where id=$1`, s.Id, s.Name, s.Location, s.Partner)
+			_, err = tx.Exec(`update stations set name=$2,location=coalesce($3,'null'::jsonb),partner=coalesce($4,'null'::jsonb),upstream=false,deleted_at=null where id=$1`, s.Id, s.Name, s.Location, s.Partner)
 		}
 	} else {
 		// update
@@ -85,9 +85,9 @@ func EditStation(s *Station) (err error) {
 			return err
 		}
 		if s.Upstream == false {
-			_, err = tx.Exec(`update stations set name=$2,location=$3,partner=$4 where id=$1`, s.Id, s.Name, s.Location, s.Partner)
+			_, err = tx.Exec(`update stations set name=$2,location=coalesce($3,'null'::jsonb),partner=coalesce($4,'null'::jsonb) where id=$1`, s.Id, s.Name, s.Location, s.Partner)
 		} else {
-			_, err = tx.Exec(`update stations set name=$2,partner=$3 where id=$1`, s.Id, s.Name, s.Partner)
+			_, err = tx.Exec(`update stations set name=$2,partner=coalesce($3,'null'::jsonb) where id=$1`, s.Id, s.Name, s.Partner)
 		}
 	}
 	if err != nil {
@@ -103,8 +103,8 @@ func SyncStation(upstreamId int, s Station) (int64, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.Exec(`insert into stations(id,identifier,name,location,upstream) VALUES ($1,$2,$3,$4,true) on conflict (id) 
-do update set location=excluded.location, upstream=true, deleted_at=null where stations.location!=$4 or stations.upstream!=true or stations.deleted_at is not null`,
+	res, err := tx.Exec(`insert into stations(id,identifier,name,location,upstream) VALUES ($1,$2,$3,coalesce($4,'null'::jsonb),true) on conflict (id) 
+do update set location=excluded.location, upstream=true, deleted_at=null where stations.location!=coalesce($4,'null'::jsonb) or stations.upstream!=true or stations.deleted_at is not null`,
 		s.Id, s.Identifier, s.Name, s.Location)
 	n, err := checkResult(res, err)
 	if err != nil {

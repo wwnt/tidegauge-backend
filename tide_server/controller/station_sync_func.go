@@ -47,7 +47,7 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 				slog.Error("Failed to add device", "station_id", stationId, "device_name", deviceName, "error", err)
 				return
 			}
-			Publish(configPubSub, SendMsgStruct{Type: kMsgSyncDevice, Body: device}, nil)
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncDevice, Body: device}, nil)
 		} else {
 			oldDevices[deviceName] = true
 		}
@@ -62,7 +62,7 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 				slog.Error("Failed to delete device", "station_id", stationId, "device_name", deviceName, "error", err)
 				return
 			}
-			Publish(configPubSub, SendMsgStruct{Type: kMsgDelDevice, Body: db.Device{StationId: stationId, Name: deviceName}}, nil)
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgDelDevice, Body: db.Device{StationId: stationId, Name: deviceName}}, nil)
 		}
 	}
 
@@ -73,7 +73,7 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 				slog.Error("Failed to delete item", "station_id", stationId, "item_name", itemName, "error", err)
 				return
 			}
-			Publish(configPubSub, SendMsgStruct{Type: kMsgDelItem, Body: db.Item{StationId: stationId, Name: itemName}}, nil)
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgDelItem, Body: db.Item{StationId: stationId, Name: itemName}}, nil)
 		}
 	}
 	var numNewItems int
@@ -89,11 +89,11 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 				slog.Error("Failed to edit item", "station_id", stationId, "item_name", itemName, "error", err)
 				return
 			}
-			Publish(configPubSub, SendMsgStruct{Type: kMsgSyncItem, Body: item}, nil)
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncItem, Body: item}, nil)
 		}
 	}
 	if numNewItems > 0 {
-		handleAddItems()
+		hub.BroadcastAddItems()
 	}
 
 	if camerasJson, err := json.Marshal(info.Cameras); err != nil {
@@ -104,7 +104,7 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 			slog.Error("Failed to sync station cameras", "station_id", stationId, "error", err)
 			return
 		} else if n > 0 {
-			Publish(configPubSub, SendMsgStruct{Type: kMsgSyncStationCannotEdit, Body: db.Station{Id: stationId, Cameras: camerasJson}}, nil)
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncStationCannotEdit, Body: db.Station{Id: stationId, Cameras: camerasJson}}, nil)
 		}
 	}
 	return true
@@ -161,14 +161,11 @@ func ReadMissData(decoder *json.Decoder, stationId uuid.UUID) (retOk bool) {
 				return
 			} else if n > 0 {
 				stationItem := common.StationItemStruct{StationId: stationId, ItemName: itemName}
-				err = missDataPubSub.Publish(forwardDataStruct{
+				hub.Publish(BrokerMissingData, forwardDataStruct{
 					Type:              kMsgMissData,
 					StationItemStruct: stationItem,
 					DataTimeStruct:    dataTime,
 				}, stationItem)
-				if err != nil {
-					slog.Error("Failed to publish miss data", "station_id", stationId, "item_name", itemName, "error", err)
-				}
 			}
 		}
 	}
@@ -203,14 +200,11 @@ func ReadMissStatusLogs(decoder *json.Decoder, stationId uuid.UUID) (retOk bool)
 			slog.Error("Failed to save item status log", "station_id", stationId, "item_name", statusLog.ItemName, "row_id", statusLog.RowId, "error", err)
 			return
 		} else if n > 0 {
-			err = configPubSub.Publish(SendMsgStruct{Type: kMsgMissItemStatus,
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgMissItemStatus,
 				Body: common.FullItemStatusStruct{
 					StationId:             stationId,
 					RowIdItemStatusStruct: statusLog,
 				}}, nil)
-			if err != nil {
-				slog.Error("Failed to publish miss item status", "station_id", stationId, "item_name", statusLog.ItemName, "error", err)
-			}
 		}
 	}
 	return true

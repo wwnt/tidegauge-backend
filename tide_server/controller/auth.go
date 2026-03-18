@@ -4,26 +4,26 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"tide/common"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
-func Login(c *gin.Context) {
-	userManager.Login(c.Request, c.Writer)
+func Login(w http.ResponseWriter, r *http.Request) {
+	userManager.Login(r, w)
 }
 
-func Logout(c *gin.Context) {
-	userManager.Logout(c.Request, c.Writer)
+func Logout(w http.ResponseWriter, r *http.Request) {
+	userManager.Logout(r, w)
 }
 
-func ListUser(c *gin.Context) {
+func ListUser(w http.ResponseWriter, r *http.Request) {
 	var condition, role = 1, auth.NormalUser
-	if c.Query("application") == "true" {
+	if r.URL.Query().Get("application") == "true" {
 		condition, role = 0, auth.DisabledUser
 	}
 	users, err := userManager.ListUsers(condition, role)
@@ -31,36 +31,41 @@ func ListUser(c *gin.Context) {
 		slog.Error("Failed to list users", "error", err)
 		return
 	}
-	c.JSON(http.StatusOK, users)
+	writeJSON(w, http.StatusOK, users)
 }
 
-func UserInfo(c *gin.Context) {
-	c.JSON(http.StatusOK, c.MustGet(contextKeyUserInfo))
+func UserInfo(w http.ResponseWriter, r *http.Request) {
+	user, ok := requestUserInfo(r)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	writeJSON(w, http.StatusOK, user)
 }
 
-func EditUser(c *gin.Context) {
+func EditUser(w http.ResponseWriter, r *http.Request) {
 	var (
-		loginRole     = c.GetInt(contextKeyRole)
-		loginUsername = c.GetString(contextKeyUsername)
+		loginRole     = requestRole(r)
+		loginUsername = requestUsername(r)
 		err           error
 	)
 	editMu.Lock()
 	defer editMu.Unlock()
+
 	if loginRole == auth.NormalUser {
 		// can only update his own settings(email and password)
 		var reqUser auth.UserBaseInfo
-		if err = c.Bind(&reqUser); err != nil {
+		if !readJSONOrBadRequest(w, r, &reqUser) {
 			return
 		}
 		reqUser.Username = loginUsername
-		err = userManager.EditUserBaseInfo(reqUser)
-		if err != nil {
+		if err = userManager.EditUserBaseInfo(reqUser); err != nil {
 			slog.Error("Failed to edit user base info", "username", loginUsername, "error", err)
 			return
 		}
 	} else {
 		var reqUser auth.User
-		if err = c.Bind(&reqUser); err != nil {
+		if !readJSONOrBadRequest(w, r, &reqUser) {
 			return
 		}
 		if reqUser.Username == "" {
@@ -68,8 +73,7 @@ func EditUser(c *gin.Context) {
 		}
 		if reqUser.Username == loginUsername {
 			// update himself
-			err = userManager.EditUserBaseInfo(reqUser.UserBaseInfo)
-			if err != nil {
+			if err = userManager.EditUserBaseInfo(reqUser.UserBaseInfo); err != nil {
 				slog.Error("Failed to edit user base info for self", "username", loginUsername, "error", err)
 				return
 			}
@@ -90,7 +94,7 @@ func EditUser(c *gin.Context) {
 				}
 				if reqUser.Password != "" || reqUser.Role == auth.DisabledUser {
 					// password changed or disable login
-					closeConnByUser(reqUser.Username, connTypeAny)
+					hub.DisconnectUser(reqUser.Username, connTypeAny)
 				} else if reqUserPre.Role != reqUser.Role {
 					if reqUser.Role == auth.NormalUser {
 						permissions, err := authorization.GetPermissions(reqUser.Username)
@@ -98,9 +102,9 @@ func EditUser(c *gin.Context) {
 							slog.Error("Failed to get user permissions", "username", reqUser.Username, "error", err)
 							return
 						}
-						handlePermissionChange(reqUser.Username, permissions)
+						hub.UpdatePermissions(reqUser.Username, permissions)
 					} else {
-						handlePermissionChange(reqUser.Username, nil)
+						hub.UpdatePermissions(reqUser.Username, nil)
 					}
 				}
 			} else if errors.Is(err, auth.ErrUserNotFound) {
@@ -114,12 +118,12 @@ func EditUser(c *gin.Context) {
 			}
 		}
 	}
-	_, _ = c.Writer.Write([]byte("ok"))
+	writeOK(w)
 }
 
-func DelUser(c *gin.Context) {
+func DelUser(w http.ResponseWriter, r *http.Request) {
 	var usernames []string
-	if c.Bind(&usernames) != nil {
+	if !readJSONOrBadRequest(w, r, &usernames) {
 		return
 	}
 	for _, username := range usernames {
@@ -127,25 +131,27 @@ func DelUser(c *gin.Context) {
 		if err != nil {
 			return
 		}
-		if user.Role <= auth.Admin { //normal user and admin can be deleted
+		if user.Role <= auth.Admin {
 			if err = userManager.DelUser(username); err != nil {
 				slog.Error("Failed to delete user", "username", username, "error", err)
 				return
 			}
-			closeConnByUser(username, connTypeAny)
-
+			hub.DisconnectUser(username, connTypeAny)
 			go mailDelUser(user.Username, user.Email)
 		}
 	}
-	_, _ = c.Writer.Write([]byte("ok"))
+	writeOK(w)
 }
 
-func ApplyAccount(c *gin.Context) {
+func ApplyAccount(w http.ResponseWriter, r *http.Request) {
 	var baseInfo auth.UserBaseInfo
-	if err := c.Bind(&baseInfo); err != nil {
+	if !readJSONOrBadRequest(w, r, &baseInfo) {
 		return
 	}
-	err := userManager.AddUser(auth.User{UserBaseInfo: baseInfo, UserAuthority: auth.UserAuthority{Role: auth.DisabledUser}})
+	err := userManager.AddUser(auth.User{
+		UserBaseInfo:  baseInfo,
+		UserAuthority: auth.UserAuthority{Role: auth.DisabledUser},
+	})
 	if err != nil {
 		slog.Warn("Failed to apply account", "username", baseInfo.Username, "error", err)
 		return
@@ -168,12 +174,12 @@ func ApplyAccount(c *gin.Context) {
 			slog.Error("Failed to send notification email", "error", err)
 		}
 	}()
-	_, _ = c.Writer.Write([]byte("ok"))
+	writeOK(w)
 }
 
-func PassApplication(c *gin.Context) {
+func PassApplication(w http.ResponseWriter, r *http.Request) {
 	var usernames []string
-	if c.Bind(&usernames) != nil {
+	if !readJSONOrBadRequest(w, r, &usernames) {
 		return
 	}
 	editMu.Lock()
@@ -196,23 +202,24 @@ func PassApplication(c *gin.Context) {
 			}()
 		}
 	}
-	_, _ = c.Writer.Write([]byte("ok"))
+	writeOK(w)
 }
 
-func ListPermission(c *gin.Context) {
+func ListPermission(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
 		username string
-		role     = c.GetInt(contextKeyRole)
+		role     = requestRole(r)
 	)
 	if role == auth.NormalUser {
-		username = c.GetString(contextKeyUsername)
+		username = requestUsername(r)
 	} else if role >= auth.Admin {
-		username = c.Query("username")
+		username = r.URL.Query().Get("username")
 	} else {
 		return
 	}
-	var permissions = make(common.UUIDStringsMap)
+
+	permissions := make(common.UUIDStringsMap)
 	if role >= auth.Admin && username == "" {
 		items, err := db.GetItems(uuid.Nil)
 		if err != nil {
@@ -229,17 +236,21 @@ func ListPermission(c *gin.Context) {
 			return
 		}
 	}
-	c.JSON(http.StatusOK, permissions)
+	writeJSON(w, http.StatusOK, permissions)
 }
 
 type editPermissionStruct struct {
-	Username    string                `json:"username" binding:"required"`
+	Username    string                `json:"username"`
 	Permissions common.UUIDStringsMap `json:"scopes"`
 }
 
-func EditPermission(c *gin.Context) {
+func EditPermission(w http.ResponseWriter, r *http.Request) {
 	var params editPermissionStruct
-	if c.Bind(&params) != nil {
+	if !readJSONOrBadRequest(w, r, &params) {
+		return
+	}
+	if params.Username == "" {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -259,22 +270,22 @@ func EditPermission(c *gin.Context) {
 		slog.Error("Failed to edit user permissions", "username", params.Username, "error", err)
 		return
 	}
-	handlePermissionChange(params.Username, params.Permissions)
-	_, _ = c.Writer.Write([]byte("ok"))
+	hub.UpdatePermissions(params.Username, params.Permissions)
+	writeOK(w)
 }
 
-func ListUpstream(c *gin.Context) {
+func ListUpstream(w http.ResponseWriter, _ *http.Request) {
 	upstreams, err := db.GetUpstreams()
 	if err != nil {
 		slog.Error("Failed to get upstreams list", "error", err)
 		return
 	}
-	c.JSON(http.StatusOK, upstreams)
+	writeJSON(w, http.StatusOK, upstreams)
 }
 
-func EditUpstream(c *gin.Context) {
+func EditUpstream(w http.ResponseWriter, r *http.Request) {
 	var upstream db.Upstream
-	if c.Bind(&upstream) != nil {
+	if !readJSONOrBadRequest(w, r, &upstream) {
 		return
 	}
 	editMu.Lock()
@@ -284,32 +295,50 @@ func EditUpstream(c *gin.Context) {
 		return
 	}
 	if value, ok := recvConnections.Load(upstream.Id); ok {
-		value.(*upstreamStorage).cancelF()
+		value.(*upstreamSyncState).cancel()
 	}
 	go startSync(upstream)
-	_, _ = c.Writer.Write([]byte("ok"))
+	writeOK(w)
 }
 
-func DelUpstream(c *gin.Context) {
-	var params struct {
-		Id int `form:"id" binding:"required"`
+func DelUpstream(w http.ResponseWriter, r *http.Request) {
+	var id int
+
+	_ = r.ParseForm()
+	if raw := r.Form.Get("id"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		id = parsed
+	} else {
+		var params struct {
+			Id int `json:"id"`
+		}
+		if !readJSONOrBadRequest(w, r, &params) {
+			return
+		}
+		id = params.Id
 	}
-	if c.Bind(&params) != nil {
+
+	if id == 0 {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	editMu.Lock()
 	defer editMu.Unlock()
-	stationIds, err := db.DelUpstream(params.Id)
+	stationIds, err := db.DelUpstream(id)
 	if err != nil {
-		slog.Error("Failed to delete upstream", "upstream_id", params.Id, "error", err)
+		slog.Error("Failed to delete upstream", "upstream_id", id, "error", err)
 		return
 	}
 	for _, stationId := range stationIds {
-		Publish(configPubSub, SendMsgStruct{Type: kMsgDelUpstreamStation, Body: stationId}, nil)
+		hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgDelUpstreamStation, Body: stationId}, nil)
 	}
-	if value, ok := recvConnections.LoadAndDelete(params.Id); ok {
-		value.(*upstreamStorage).cancelF()
+	if value, ok := recvConnections.LoadAndDelete(id); ok {
+		value.(*upstreamSyncState).cancel()
 	}
-	_, _ = c.Writer.Write([]byte("ok"))
+	writeOK(w)
 }

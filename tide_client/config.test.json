@@ -2,11 +2,7 @@
     "listen": "localhost:7100",
     "server": "192.168.5.4:7102",
     "identifier": "station1",
-    "devices": {
-        "mock_conn": [
-            "../devices_mock.json"
-        ]
-    },
+    "devices": {},
     "db": {
         "dsn": "file:data.db?cache=shared&mode=memory"
     },

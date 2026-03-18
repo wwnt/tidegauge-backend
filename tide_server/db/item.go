@@ -3,20 +3,21 @@ package db
 import (
 	"database/sql"
 	"errors"
-	"github.com/google/uuid"
 	"strconv"
 	"tide/common"
 	"tide/pkg/custype"
+
+	"github.com/google/uuid"
 )
 
 type Item struct {
-	StationId       uuid.UUID               `json:"station_id" binding:"required"`
-	Name            string                  `json:"name" binding:"max=20"`
-	Type            string                  `json:"type"`
-	DeviceName      string                  `json:"device_name"`
-	Status          common.Status           `json:"status"`
-	StatusChangedAt custype.TimeMillisecond `json:"status_changed_at"`
-	Available       bool                    `json:"available"`
+	StationId       uuid.UUID      `json:"station_id" binding:"required"`
+	Name            string         `json:"name" binding:"max=20"`
+	Type            string         `json:"type"`
+	DeviceName      string         `json:"device_name"`
+	Status          common.Status  `json:"status"`
+	StatusChangedAt custype.UnixMs `json:"status_changed_at"`
+	Available       bool           `json:"available"`
 }
 
 func GetItems(stationId uuid.UUID) ([]Item, error) {

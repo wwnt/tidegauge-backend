@@ -5,10 +5,9 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"runtime"
 	"time"
 
+	"github.com/lmittmann/tint"
 	"github.com/robfig/cron/v3"
 )
 
@@ -18,9 +17,13 @@ type Ftp struct {
 }
 
 var Config struct {
-	LogLevel   string              `json:"log_level"`
-	Listen     string              `json:"listen"`
-	Server     string              `json:"server"`
+	LogLevel string `json:"log_level"`
+	Listen   string `json:"listen"`
+	Server   string `json:"server"`
+	SyncV2   struct {
+		Enabled bool   `json:"enabled"`
+		Addr    string `json:"addr"`
+	} `json:"sync_v2"`
 	Identifier string              `json:"identifier"`
 	Devices    map[string][]string `json:"devices"`
 	Db         struct {
@@ -75,27 +78,12 @@ func initLogger() {
 	default:
 		level = slog.LevelInfo
 	}
-	_, filename, _, _ := runtime.Caller(0)
-	currentDir := filepath.Dir(filename)
-	projectDir := filepath.Dir(currentDir)
-	replace := func(groups []string, a slog.Attr) slog.Attr {
-		if a.Key == slog.TimeKey {
-			a.Value = slog.StringValue(a.Value.Time().Format("2006-01-02 15:04:05"))
-		}
-		// Remove the directory from the source's filename.
-		if a.Key == slog.SourceKey {
-			source := a.Value.Any().(*slog.Source)
-			rel, err := filepath.Rel(projectDir, source.File)
-			if err == nil {
-				source.File = rel
-			} else {
-				source.File = filepath.Base(source.File)
-			}
-		}
-		return a
-	}
 
-	// Create JSON format log handler, suitable for systemd integration
-	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level, AddSource: true, ReplaceAttr: replace})
+	// Use tinted text logs for readability.
+	handler := tint.NewHandler(os.Stdout, &tint.Options{
+		Level:      level,
+		TimeFormat: time.DateTime,
+		AddSource:  true,
+	})
 	slog.SetDefault(slog.New(handler))
 }

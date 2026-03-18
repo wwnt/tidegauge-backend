@@ -48,10 +48,10 @@ func syncDataClient(conn net.Conn) {
 				_, _ = db.UpdateItemStatus(msg.StationId, msg.ItemName, common.NoStatus, msg.Millisecond.ToTime())
 			}
 			if msg.Type == kMsgMissData {
-				Publish(missDataPubSub, msg, msg.StationItemStruct)
+				hub.Publish(BrokerMissingData, msg, msg.StationItemStruct)
 			} else {
 				// msg.Type == kMsgData
-				Publish(dataPubSub, msg, msg.StationItemStruct)
+				hub.Publish(BrokerData, msg, msg.StationItemStruct)
 			}
 		}
 	}
@@ -105,14 +105,11 @@ func fillMissDataClient(conn net.Conn) (retOk bool) {
 					return
 				} else if n > 0 {
 					stationItem := common.StationItemStruct{StationId: stationId, ItemName: itemName}
-					err = missDataPubSub.Publish(forwardDataStruct{
+					hub.Publish(BrokerMissingData, forwardDataStruct{
 						Type:              kMsgMissData,
 						StationItemStruct: stationItem,
 						DataTimeStruct:    data,
 					}, stationItem)
-					if err != nil {
-						slog.Error("Failed to publish miss data", "station_id", stationId, "item_name", itemName, "error", err)
-					}
 				}
 			}
 		}

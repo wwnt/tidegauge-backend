@@ -1,3 +1,11 @@
+# Reverse SSH Tunnel Guide
+
+Purpose: document how to keep an outbound reverse SSH tunnel alive with `systemd` for field access.
+
+Audience: operators maintaining `tide_client` nodes behind private networks.
+
+Related Docs: [tide_client guide](../../tide_client/README.md), [Client config reference](config-reference.md)
+
 ## Setting Up a Reverse SSH Tunnel Using systemd
 
 This guide explains how to establish a reverse SSH tunnel from an internal (private network) machine to a public-facing server using `systemd`. Instead of relying on `autossh`, we’ll use a regular `ssh` command, with `systemd` responsible for maintaining and restarting the connection.

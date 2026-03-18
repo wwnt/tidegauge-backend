@@ -1,90 +1,88 @@
 package controller
 
 import (
-	"github.com/PuerkitoBio/goquery"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
 	"tide/tide_server/db"
+
+	"github.com/PuerkitoBio/goquery"
 )
 
-func GetSateAltimetry(c *gin.Context) {
-	tn := c.Query("tableName")
+func GetSateAltimetry(w http.ResponseWriter, r *http.Request) {
+	tn := r.URL.Query().Get("tableName")
 	if tn == "" {
-		c.AbortWithStatus(http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	ss, err := db.GetSateAltimetry(tn)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusOK, ss)
+	writeJSON(w, http.StatusOK, ss)
 }
 
-func GetSeaLevel(c *gin.Context) {
+func GetSeaLevel(w http.ResponseWriter, _ *http.Request) {
 	ss, err := db.GetSeaLevel()
 	if err != nil {
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusOK, ss)
+	writeJSON(w, http.StatusOK, ss)
 }
 
-func GetGlossDataList(c *gin.Context) {
+func GetGlossDataList(w http.ResponseWriter, _ *http.Request) {
 	ss, err := db.GetGlossData()
 	if err != nil {
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusOK, ss)
+	writeJSON(w, http.StatusOK, ss)
 }
 
-func GetSonelDataList(c *gin.Context) {
+func GetSonelDataList(w http.ResponseWriter, _ *http.Request) {
 	ds, err := db.GetSonelData()
 	if err != nil {
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusOK, ds)
+	writeJSON(w, http.StatusOK, ds)
 }
 
-func GetPsmslDataList(c *gin.Context) {
+func GetPsmslDataList(w http.ResponseWriter, _ *http.Request) {
 	ds, err := db.GetPsmslData()
 	if err != nil {
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusOK, ds)
+	writeJSON(w, http.StatusOK, ds)
 }
 
-func IOCHistory(c *gin.Context) {
-	id := c.Query("id")
+func IOCHistory(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
 	if id == "" {
-		c.Status(http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	resp, err := http.Get("https://www.ioc-sealevelmonitoring.org/bgraph.php?code=" + id + "&output=tab&period=0.5")
 	if err != nil {
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		c.AbortWithStatus(resp.StatusCode)
+		w.WriteHeader(resp.StatusCode)
 		return
 	}
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		_ = c.AbortWithError(http.StatusInternalServerError, err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	tr := doc.Find("tr")
-
-	var radIdx = 0
-
+	radIdx := 0
 	tr.Eq(1).Children().Each(func(i int, selection *goquery.Selection) {
 		if strings.Contains(selection.Text(), "rad") {
 			radIdx = i
@@ -93,17 +91,17 @@ func IOCHistory(c *gin.Context) {
 	if radIdx == 0 {
 		return
 	}
+
 	// remove 2 row header
 	tr = tr.Slice(2, goquery.ToEnd)
-
 	if tr.Size() > 30 {
 		tr = tr.Slice(-30, goquery.ToEnd)
 	}
 
 	var data [][2]string
-	tr.Each(func(i int, selection *goquery.Selection) {
+	tr.Each(func(_ int, selection *goquery.Selection) {
 		td := selection.Children()
 		data = append(data, [2]string{td.Eq(0).Text(), td.Eq(radIdx).Text()})
 	})
-	c.JSON(http.StatusOK, data)
+	writeJSON(w, http.StatusOK, data)
 }

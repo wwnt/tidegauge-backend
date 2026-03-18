@@ -6,15 +6,18 @@ import (
 	"log/slog"
 	"net/smtp"
 	"os"
-	"path/filepath"
-	"runtime"
 	"time"
+
+	"github.com/lmittmann/tint"
 )
 
 var Config struct {
 	Debug  bool
 	Listen string `json:"listen"`
-	Tide   struct {
+	SyncV2 struct {
+		Enabled bool `json:"enabled"`
+	} `json:"sync_v2"`
+	Tide struct {
 		Listen string `json:"listen"`
 		Camera struct {
 			Storage             string `json:"storage"`
@@ -77,26 +80,12 @@ func ReadConfig(name string) {
 	} else {
 		level = slog.LevelInfo
 	}
-	_, filename, _, _ := runtime.Caller(0)
-	currentDir := filepath.Dir(filename)
-	projectDir := filepath.Dir(currentDir)
-	replace := func(groups []string, a slog.Attr) slog.Attr {
-		if a.Key == slog.TimeKey {
-			a.Value = slog.StringValue(a.Value.Time().Format("2006-01-02 15:04:05"))
-		}
-		// Remove the directory from the source's filename.
-		if a.Key == slog.SourceKey {
-			source := a.Value.Any().(*slog.Source)
-			rel, err := filepath.Rel(projectDir, source.File)
-			if err == nil {
-				source.File = rel
-			} else {
-				source.File = filepath.Base(source.File)
-			}
-		}
-		return a
-	}
-	// Create JSON format log handler, suitable for systemd integration
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level, AddSource: true, ReplaceAttr: replace}))
-	slog.SetDefault(logger)
+
+	// Use tinted text logs for readability.
+	handler := tint.NewHandler(os.Stdout, &tint.Options{
+		Level:      level,
+		TimeFormat: time.DateTime,
+		AddSource:  true,
+	})
+	slog.SetDefault(slog.New(handler))
 }

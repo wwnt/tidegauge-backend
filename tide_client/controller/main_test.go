@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"github.com/stretchr/testify/assert"
 	"log"
 	"os"
 	"testing"
@@ -18,34 +17,15 @@ func TestMain(m *testing.M) {
 	db.Init()
 	db.InitDB()
 
-	dataPubSub = pubsub.NewPubSub()
-
-	addDevices()
-	go receiveData(dataPubSub)
+	dataBroker = pubsub.NewBroker()
+	go receiveData(dataBroker)
 
 	rc := m.Run()
 
 	os.Exit(rc)
 }
 
-func TestStationInfoDevice(t *testing.T) {
-	var devices = common.StringMapMap{
-		"rs485_1": {
-			"air_humidity":    "item1",
-			"air_temperature": "item2",
-		},
-		"rs485_2": {
-			"air_humidity":    "item3",
-			"air_temperature": "item4",
-		},
-		"gpio1": {
-			"precipitation_detection": "item5",
-		},
-	}
-	assert.Equal(t, devices, stationInfo.Devices)
-}
-
-var dataPubSub *pubsub.PubSub
+var dataBroker *pubsub.Broker
 var station1Info = common.StationInfoStruct{
 	Identifier: "station1",
 	Devices: common.StringMapMap{

@@ -7,57 +7,30 @@ import (
 	"time"
 )
 
-type TimeSecond int64
+type UnixMs int64
 
-func ToTimeSecond(t time.Time) TimeSecond {
-	return TimeSecond(t.Unix())
+func ToUnixMs(t time.Time) UnixMs {
+	return UnixMs(t.UnixMilli())
 }
-func (t TimeSecond) ToInt64() int64 {
+
+func (t UnixMs) ToInt64() int64 {
 	return int64(t)
 }
-func (t TimeSecond) ToTime() time.Time {
-	return time.Unix(int64(t), 0)
-}
-func (t TimeSecond) Value() (driver.Value, error) {
-	return t.ToTime(), nil
-}
-func (t *TimeSecond) Scan(src any) error {
-	switch s := src.(type) {
-	case time.Time:
-		*t = ToTimeSecond(s)
-	case int64:
-		*t = TimeSecond(s)
-	case nil:
-		*t = 0
-	default:
-		return fmt.Errorf("unsupported Scan, storing driver.Value type %T into type time.Time", src)
-	}
-	return nil
-}
-func (t TimeSecond) String() string {
-	return strconv.FormatInt(int64(t), 10)
-}
 
-type TimeMillisecond int64
-
-func ToTimeMillisecond(t time.Time) TimeMillisecond {
-	return TimeMillisecond(t.UnixMilli())
-}
-func (t TimeMillisecond) ToInt64() int64 {
-	return int64(t)
-}
-func (t TimeMillisecond) ToTime() time.Time {
+func (t UnixMs) ToTime() time.Time {
 	return time.UnixMilli(int64(t))
 }
-func (t TimeMillisecond) Value() (driver.Value, error) {
+
+func (t UnixMs) Value() (driver.Value, error) {
 	return t.ToTime(), nil
 }
-func (t *TimeMillisecond) Scan(src any) error {
+
+func (t *UnixMs) Scan(src any) error {
 	switch s := src.(type) {
 	case time.Time:
-		*t = ToTimeMillisecond(s)
+		*t = ToUnixMs(s)
 	case int64:
-		*t = TimeMillisecond(s)
+		*t = UnixMs(s)
 	case nil:
 		*t = 0
 	default:
@@ -65,6 +38,7 @@ func (t *TimeMillisecond) Scan(src any) error {
 	}
 	return nil
 }
-func (t TimeMillisecond) String() string {
+
+func (t UnixMs) String() string {
 	return strconv.FormatInt(int64(t), 10)
 }

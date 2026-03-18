@@ -3,29 +3,29 @@ package controller
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"tide/pkg/custype"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hashicorp/yamux"
 )
 
-func ListStation(c *gin.Context) {
+func ListStation(w http.ResponseWriter, r *http.Request) {
 	stations, err := db.GetStations()
 	if err != nil {
 		slog.Error("Failed to get stations list", "error", err)
 		return
 	}
-	c.JSON(http.StatusOK, stations)
+	writeJSON(w, http.StatusOK, stations)
 }
 
-func EditStation(c *gin.Context) {
+func EditStation(w http.ResponseWriter, r *http.Request) {
 	var station db.Station
-	if err := c.Bind(&station); err != nil {
-		slog.Error("Failed to bind station data", "error", err)
+	if !readJSONOrBadRequest(w, r, &station) {
+		slog.Error("Failed to bind station data")
 		return
 	}
 	editMu.Lock()
@@ -35,19 +35,25 @@ func EditStation(c *gin.Context) {
 		return
 	}
 	if !station.Upstream { // Only sync the local station
-		sendToConfigPubSub(kMsgSyncStation, station)
+		hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncStation, Body: station}, nil)
 	}
-	_, _ = c.Writer.Write([]byte("ok"))
+	writeOK(w)
 }
 
-func DelStation(c *gin.Context) {
+func DelStation(w http.ResponseWriter, r *http.Request) {
 	editMu.Lock()
 	defer editMu.Unlock()
-	stationId, err := uuid.Parse(c.PostForm("id"))
-	if err != nil {
-		_ = c.AbortWithError(http.StatusBadRequest, err).SetType(gin.ErrorTypeBind)
+
+	if err := r.ParseForm(); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	stationId, err := uuid.Parse(r.Form.Get("id"))
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	// Can only delete local stations
 	if n, err := db.DelLocalStation(stationId); err != nil {
 		slog.Error("Failed to delete local station", "station_id", stationId, "error", err)
@@ -56,114 +62,121 @@ func DelStation(c *gin.Context) {
 		if value, ok := recvConnections.Load(stationId); ok {
 			_ = value.(*yamux.Session).Close()
 		}
-		sendToConfigPubSub(kMsgDelUpstreamStation, stationId)
-	} //If there is no update, there is no need to publish
-	_, _ = c.Writer.Write([]byte("ok"))
+		hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgDelUpstreamStation, Body: stationId}, nil)
+	}
+	writeOK(w)
 }
 
-func ListDevice(c *gin.Context) {
-	stationId, _ := uuid.Parse(c.Query("station_id"))
+func ListDevice(w http.ResponseWriter, r *http.Request) {
+	stationId, _ := uuid.Parse(r.URL.Query().Get("station_id"))
 	devices, err := db.GetDevices(stationId)
 	if err != nil {
 		slog.Error("Failed to get devices", "station_id", stationId, "error", err)
 		return
 	}
-	c.JSON(http.StatusOK, devices)
+	writeJSON(w, http.StatusOK, devices)
 }
 
-func EditDevice(c *gin.Context) {
+func EditDevice(w http.ResponseWriter, r *http.Request) {
 	editMu.Lock()
 	defer editMu.Unlock()
+
 	var device db.Device
-	if err := c.Bind(&device); err != nil {
-		slog.Error("Failed to bind device data", "error", err)
-		return
-	}
-	if up, err := db.IsUpstreamStation(device.StationId); err != nil || up {
+	if !readJSONOrBadRequest(w, r, &device) {
+		slog.Error("Failed to bind device data")
 		return
 	}
 	// Can only edit local stations
+	if up, err := db.IsUpstreamStation(device.StationId); err != nil || up {
+		return
+	}
 	if err := db.EditDevice(device); err != nil {
 		slog.Error("Failed to edit device", "device", device.Name, "error", err)
 		return
 	}
-	sendToConfigPubSub(kMsgSyncDevice, device)
-	_, _ = c.Writer.Write([]byte("ok"))
+	hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncDevice, Body: device}, nil)
+	writeOK(w)
 }
 
-func ListDeviceRecord(c *gin.Context) {
+func ListDeviceRecord(w http.ResponseWriter, r *http.Request) {
 	deviceRecords, err := db.GetDeviceRecords()
 	if err != nil {
 		slog.Error("Failed to get device records", "error", err)
 		return
 	}
-	c.JSON(http.StatusOK, deviceRecords)
+	writeJSON(w, http.StatusOK, deviceRecords)
 }
 
-func EditDeviceRecord(c *gin.Context) {
+func EditDeviceRecord(w http.ResponseWriter, r *http.Request) {
 	var dr db.DeviceRecord
-	if err := c.Bind(&dr); err != nil {
-		slog.Error("Failed to bind device record data", "error", err)
+	if !readJSONOrBadRequest(w, r, &dr) {
+		slog.Error("Failed to bind device record data")
 		return
 	}
-	if dr.Id == uuid.Nil { // Can only edit local stations
+	if dr.Id == uuid.Nil {
 		if up, err := db.IsUpstreamStation(dr.StationId); err != nil || up {
 			return
 		}
 	}
+
 	editMu.Lock()
 	defer editMu.Unlock()
 	if err := db.EditDeviceRecord(&dr); err != nil {
 		slog.Error("Failed to edit device record", "device_record_id", dr.Id, "error", err)
 		return
 	}
-	sendToConfigPubSub(kMsgEditDeviceRecord, dr)
-	_, _ = c.Writer.Write([]byte("ok"))
+	hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgEditDeviceRecord, Body: dr}, nil)
+	writeOK(w)
 }
 
-func ListItem(c *gin.Context) {
+func ListItem(w http.ResponseWriter, r *http.Request) {
 	var stationId uuid.UUID
 	var err error
-	s, ok := c.GetQuery("station_id")
-	if ok {
-		if stationId, err = uuid.Parse(s); err != nil {
+	if raw := r.URL.Query().Get("station_id"); raw != "" {
+		stationId, err = uuid.Parse(raw)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	}
+
 	items, err := db.GetItems(stationId)
 	if err != nil {
 		slog.Error("Failed to get items", "station_id", stationId, "error", err)
 		return
 	}
-	c.JSON(http.StatusOK, items)
+	writeJSON(w, http.StatusOK, items)
 }
 
-func DataHistory(c *gin.Context) {
-	var param struct {
-		ItemName string `form:"item_name" binding:"required"`
-		Start    int64  `form:"start"`
-		End      int64  `form:"end"`
-	}
-	if err := c.Bind(&param); err != nil {
-		slog.Error("Failed to bind data history parameters", "error", err)
+func DataHistory(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	itemName := q.Get("item_name")
+	if itemName == "" {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	stationId, err := uuid.Parse(c.Query("station_id"))
+	stationId, err := uuid.Parse(q.Get("station_id"))
 	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	if c.GetInt(contextKeyRole) < auth.Admin {
-		if !authorization.CheckPermission(c.GetString(contextKeyUsername), stationId, param.ItemName) {
-			c.AbortWithStatus(http.StatusUnauthorized)
+
+	start, _ := strconv.ParseInt(q.Get("start"), 10, 64)
+	end, _ := strconv.ParseInt(q.Get("end"), 10, 64)
+
+	if requestRole(r) < auth.Admin {
+		if !authorization.CheckPermission(requestUsername(r), stationId, itemName) {
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 	}
-	ds, err := db.GetDataHistory(stationId, param.ItemName, custype.TimeMillisecond(param.Start), custype.TimeMillisecond(param.End))
+
+	ds, err := db.GetDataHistory(stationId, itemName, custype.UnixMs(start), custype.UnixMs(end))
 	if err != nil {
-		slog.Error("Failed to get data history", "station_id", stationId, "item_name", param.ItemName, "error", err)
+		slog.Error("Failed to get data history", "station_id", stationId, "item_name", itemName, "error", err)
 		return
 	}
-	c.JSON(http.StatusOK, ds)
+	writeJSON(w, http.StatusOK, ds)
 }
 
 //func bind(c *gin.Context, obj any) bool {

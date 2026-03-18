@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"syscall"
 	"tide/tide_client/db"
 	"tide/tide_client/global"
 	"time"
@@ -115,14 +114,4 @@ func isDirEmpty(dirPath string) (bool, error) {
 		return true, nil
 	}
 	return false, err
-}
-
-// CheckDiskSpace checks the available disk space for a given path.
-func CheckDiskSpace(path string) (uint64, error) {
-	var stat syscall.Statfs_t
-	err := syscall.Statfs(path, &stat)
-	if err != nil {
-		return 0, err
-	}
-	return stat.Bavail * uint64(stat.Bsize), nil
 }

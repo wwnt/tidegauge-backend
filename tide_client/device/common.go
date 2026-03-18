@@ -8,7 +8,9 @@ import (
 	"sync/atomic"
 	"tide/common"
 	"tide/pkg"
+	"tide/pkg/custype"
 	"tide/tide_client/global"
+	"time"
 )
 
 var (
@@ -35,6 +37,8 @@ func GetDevice(m string) any {
 }
 
 type itemData struct {
+	At custype.UnixMs
+
 	Typ      common.MsgType
 	ItemName string
 	Value    *float64
@@ -42,6 +46,10 @@ type itemData struct {
 
 type Device interface {
 	NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap
+}
+
+func nowMs() custype.UnixMs {
+	return custype.ToUnixMs(time.Now())
 }
 
 func AddCronJob(cron string, items map[string]string, provideItems map[string]int, job func() map[string]*float64) {
@@ -60,11 +68,12 @@ func AddCronJob(cron string, items map[string]string, provideItems map[string]in
 		defer inQuery.Store(false)
 
 		tmpData = job()
+		at := nowMs()
 
 		var sendData []itemData
 		for itemType, itemName := range items {
 			// if tmpData == nil, tmpData[itemType] == nil
-			sendData = append(sendData, itemData{Typ: common.MsgData, ItemName: itemName, Value: tmpData[itemType]})
+			sendData = append(sendData, itemData{At: at, Typ: common.MsgData, ItemName: itemName, Value: tmpData[itemType]})
 		}
 		DataReceive <- sendData
 	}
@@ -89,7 +98,7 @@ func AddCronJobWithOneItem(cron string, itemName string, job func() *float64) {
 
 		val := job()
 
-		DataReceive <- []itemData{{Typ: common.MsgData, ItemName: itemName, Value: val}}
+		DataReceive <- []itemData{{At: nowMs(), Typ: common.MsgData, ItemName: itemName, Value: val}}
 	}
 	pkg.Must2(global.CronJob.AddFunc(cron, jobWrap))
 }

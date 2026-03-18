@@ -1,3 +1,11 @@
+# Client Config Reference
+
+Purpose: describe `tide_client` runtime configuration and sample device config structure.
+
+Audience: operators and developers working on station deployment or debugging local device setup.
+
+Related Docs: [tide_client guide](../../tide_client/README.md), [Reverse SSH tunnel guide](reverse-ssh-tunnel.md), [SDI-12 noise mitigation](sdi-12-noise-mitigation.md)
+
 <!-- TOC -->
 * [config.json](#configjson)
   * [listen](#listen)
@@ -23,7 +31,7 @@
     * [config.analog[]](#configanalog)
 <!-- TOC -->
 
-# config.json
+## config.json
 
 You can view the sample file `config.template.json`
 
@@ -45,7 +53,7 @@ Sqlite Database configuration.
 
 ### db.dsn
 
-This is also known as a DSN (Data Source Name) string. [Check the sqlite driver documentation](https://github.com/mattn/go-sqlite3).
+This is also known as a DSN (Data Source Name) string. [Check the sqlite driver documentation](https://pkg.go.dev/github.com/mattn/go-sqlite3).
 
 ## cameras
 
@@ -91,12 +99,12 @@ This sample config file exists under [`devices.uart`](#devicesuart--tcp--gpio), 
 
 ## port | read_timeout | mode | model
 
-These are the uart configurations. In this example it will be read in [tide_client/controller/add_uart_devices.go](controller/add_uart_devices.go)
+These are the uart configurations. In this example it will be read in [tide_client/controller/add_uart_devices.go](../../tide_client/controller/add_uart_devices.go)
 
 ## config
 
 According to the value of [model](#port--read_timeout--mode--model), it corresponds to the configuration of different devices.
-In this example it will be read in [device/arduino.go](device/arduino.go)
+In this example it will be read in [device/arduino.go](../../tide_client/device/arduino.go)
 
 ## config.sdi12 | analog
 
@@ -119,7 +127,7 @@ A few notes:
    we need another name to distinguish them.
 4. cron: The cron expression used to read the data.
    [Check the cron documentation](https://pkg.go.dev/github.com/robfig/cron/v3),
-   and Seconds field is optional.[Check the code where is setting `cron.SecondOptional`](global/config.go)
+   and Seconds field is optional.[Check the code where is setting `cron.SecondOptional`](../../tide_client/global/config.go)
 
 ### config.analog[]
 

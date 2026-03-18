@@ -1,0 +1,236 @@
+syntax = "proto3";
+
+package tide.sync.v2;
+
+option go_package = "tide/pkg/pb/syncproto;syncproto";
+
+// StreamStation 用于 tide_client → tide_server 的站点数据同步。
+service StationSyncService {
+  rpc StreamStation(stream StationMessage) returns (stream StationMessage);
+}
+
+// StreamRelay 用于 tide_server → tide_server 的上下游同步。
+// 下游 server 作为客户端连接上游 server，上游推送配置和数据。
+service RelaySyncService {
+  rpc StreamRelay(stream RelayMessage) returns (stream RelayMessage);
+}
+
+// ---------------------------------------------------------------------------
+// 站点同步消息（tide_client ↔ tide_server）
+// ---------------------------------------------------------------------------
+
+message ClientHello {
+  string station_identifier = 1;
+  string protocol_version = 2;
+}
+
+message ServerHello {
+  string server_version = 1;
+}
+
+message DeviceItems {
+  map<string, string> items = 1; // map[item_type]item_name
+}
+
+message StationInfo {
+  string identifier = 1;
+  map<string, DeviceItems> devices = 2; // map[device_name]items
+  repeated string cameras = 3;
+}
+
+message ItemsLatest {
+  map<string, int64> latest_unix_ms = 1; // map[item_name]latest_msec
+}
+
+message StatusLatest {
+  int64 latest_row_id = 1;
+}
+
+enum DataKind {
+  DATA_KIND_UNSPECIFIED = 0;
+  DATA_KIND_NORMAL = 1;
+  DATA_KIND_GPIO = 2;
+}
+
+message DataPoint {
+  string item_name = 1;
+  double value = 2;
+  int64 unix_ms = 3;
+  DataKind kind = 4;
+}
+
+message DataBatch {
+  bool replay = 1;
+  repeated DataPoint points = 2;
+}
+
+message ItemStatusLog {
+  int64 row_id = 1;
+  string item_name = 2;
+  string status = 3;
+  int64 changed_at_unix_ms = 4;
+}
+
+message ItemStatusBatch {
+  bool replay = 1;
+  repeated ItemStatusLog logs = 2;
+}
+
+message RpiStatus {
+  double cpu_temp = 1;
+  int64 unix_ms = 2;
+}
+
+message CameraSnapshotRequest {
+  string camera_name = 1;
+}
+
+message CameraSnapshotResponse {
+  bytes data = 1;
+  string error = 2;
+}
+
+message ErrorFrame {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+message StationMessage {
+  oneof body {
+    ClientHello client_hello = 1;
+    ServerHello server_hello = 2;
+    StationInfo station_info = 3;
+    ItemsLatest items_latest = 4;
+    StatusLatest status_latest = 5;
+    DataBatch data_batch = 6;
+    ItemStatusBatch item_status_batch = 7;
+    RpiStatus rpi_status = 8;
+    CameraSnapshotRequest camera_snapshot_request = 9;
+    CameraSnapshotResponse camera_snapshot_response = 10;
+    ErrorFrame error = 11;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 上下游同步消息（tide_server ↔ tide_server）
+// ---------------------------------------------------------------------------
+
+// RelayDownstreamHello 下游 server 握手，告知自己的身份和认证信息。
+message RelayDownstreamHello {
+  string username = 1;           // 上游分配给下游的用户名
+  string protocol_version = 2;   // 协议版本，当前 "v2"
+}
+
+// RelayUpstreamHello 上游 server 握手应答。
+message RelayUpstreamHello {
+  string server_version = 1;
+}
+
+// --- 配置同步 ---
+
+// RelayStationFull 上游发送的完整站点信息（含设备和 item 列表）。
+// 用于全量配置同步阶段。
+message RelayStationFull {
+  string id = 1;                  // station UUID
+  string identifier = 2;
+  string name = 3;
+  string ip_addr = 4;
+  bytes location = 5;             // JSON
+  bytes partner = 6;              // JSON
+  bytes cameras = 7;              // JSON
+  string status = 8;
+  int64 status_changed_at_ms = 9;
+  bool upstream = 10;
+  repeated RelayDevice devices = 11;
+  repeated RelayItem items = 12;
+}
+
+message RelayDevice {
+  string station_id = 1;   // UUID
+  string name = 2;
+}
+
+message RelayItem {
+  string station_id = 1;   // UUID
+  string name = 2;
+  string type = 3;
+  string device_name = 4;
+  string status = 5;
+  int64 status_changed_at_ms = 6;
+  bool available = 7;
+}
+
+message RelayDeviceRecord {
+  string id = 1;            // UUID
+  string station_id = 2;    // UUID
+  string device_name = 3;
+  string config = 4;
+}
+
+// RelayConfigBatch 配置同步批次：全量或增量配置变更。
+// 全量同步时，entries 包含所有站点/设备/item 的快照。
+// 增量同步时，entries 包含单个变更事件。
+message RelayConfigBatch {
+  bool full_sync = 1;                         // true=全量同步, false=增量变更
+  repeated RelayStationFull stations = 2;      // 全量：所有站点
+  repeated RelayDeviceRecord device_records = 3; // 全量：所有设备记录
+  repeated RelayConfigEvent events = 4;         // 增量：配置变更事件列表
+}
+
+// RelayConfigEvent 单个配置变更事件。
+message RelayConfigEvent {
+  string type = 1;    // 事件类型，对应 v1 的 kMsg* 常量
+  bytes payload = 2;  // JSON 编码的事件体
+}
+
+// RelayAvailableItems 可用 item 列表，按站点分组。
+message RelayAvailableItems {
+  map<string, RelayAvailableItemList> stations = 1; // map[stationUUID]items
+}
+
+message RelayAvailableItemList {
+  repeated string item_names = 1;
+}
+
+// RelayItemsLatest 多站点的 item 最新时间戳，用于缺失数据查询。
+message RelayItemsLatest {
+  map<string, ItemsLatest> stations = 1; // map[stationUUID]ItemsLatest
+}
+
+// RelayStatusLatest 多站点的最新状态日志行号。
+message RelayStatusLatest {
+  map<string, int64> stations = 1; // map[stationUUID]latestRowId
+}
+
+// RelayDataBatch 带站点 ID 的数据批次，用于 server-to-server 数据转发。
+message RelayDataBatch {
+  string station_id = 1;    // UUID
+  string data_type = 2;     // "data", "data_gpio", "MissData"
+  repeated DataPoint points = 3;
+}
+
+// RelayStatusEvent 带站点 ID 的状态变更事件，用于 server-to-server 状态转发。
+message RelayStatusEvent {
+  string station_id = 1;    // UUID
+  string identifier = 2;    // 站点标识
+  int64 row_id = 3;
+  string item_name = 4;
+  string status = 5;
+  int64 changed_at_unix_ms = 6;
+}
+
+// RelayMessage server-to-server (relay) 同步的帧包装。
+message RelayMessage {
+  oneof body {
+    RelayDownstreamHello downstream_hello = 1;
+    RelayUpstreamHello upstream_hello = 2;
+    RelayConfigBatch config_batch = 3;
+    RelayDataBatch data_batch = 4;
+    RelayStatusEvent status_event = 5;
+    RelayAvailableItems available_items = 6;
+    RelayItemsLatest stations_items_latest = 7;
+    RelayStatusLatest stations_status_latest = 8;
+    ErrorFrame error = 9;
+  }
+}
