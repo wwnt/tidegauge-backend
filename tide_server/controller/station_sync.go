@@ -2,6 +2,8 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -44,6 +46,7 @@ func handleStationConn(conn net.Conn) {
 	cnf := yamux.DefaultConfig()
 	cnf.KeepAliveInterval = 100 * time.Second
 	cnf.ConnectionWriteTimeout = 30 * time.Second
+	cnf.LogOutput = io.Discard
 	session, err := yamux.Server(conn, cnf)
 	if err != nil {
 		return
@@ -64,8 +67,18 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 	encoder := json.NewEncoder(conn)
 
 	var info common.StationInfoStruct
-	if err = decoder.Decode(&info); err != nil || info.Identifier == "" || len(info.Devices) == 0 {
-		slog.Debug("Failed to decode station info", "identifier", info.Identifier, "error", err)
+	if err = decoder.Decode(&info); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(err.Error(), "use of closed network connection") {
+			return
+		}
+		slog.Debug("Rejected station connection before station info", "remote", conn.RemoteAddr().String(), "error", err)
+		return
+	}
+	if info.Identifier == "" {
+		return
+	}
+	if len(info.Devices) == 0 {
+		slog.Debug("Rejected station info with empty devices", "identifier", info.Identifier, "remote", conn.RemoteAddr().String())
 		return
 	}
 	defer func() {
@@ -84,11 +97,11 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 	}
 
 	defer func() {
-		UpdateStationStatus(statusPubSub, stationId, info.Identifier, common.Disconnected)
+		updateStationStatusAndBroadcast(stationId, info.Identifier, common.Disconnected)
 		// Finish all the work, then delete from recvConnections
 		recvConnections.Delete(stationId)
 	}()
-	if !UpdateStationStatus(statusPubSub, stationId, info.Identifier, common.Normal) {
+	if !updateStationStatusAndBroadcast(stationId, info.Identifier, common.Normal) {
 		return
 	}
 
@@ -135,7 +148,7 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 				return
 			}
 			stationItem := common.StationItemStruct{StationId: stationId, ItemName: body.ItemName}
-			dataPubSubDelay.DelayPublish(forwardDataStruct{
+			hub.PublishDelayedData(forwardDataStruct{
 				Type:              kMsgData,
 				StationItemStruct: stationItem,
 				DataTimeStruct:    body.DataTimeStruct,
@@ -155,7 +168,7 @@ func handleStationConnStream1(conn net.Conn, session *yamux.Session) {
 				return
 			}
 			stationItem := common.StationItemStruct{StationId: stationId, ItemName: body.ItemName}
-			dataPubSubDelay.DelayPublish(forwardDataStruct{
+			hub.PublishDelayedData(forwardDataStruct{
 				Type:              kMsgDataGpio,
 				StationItemStruct: stationItem,
 				DataTimeStruct:    body.DataTimeStruct,
@@ -193,14 +206,11 @@ func saveAndUpdateItemStatus(stationId uuid.UUID, identifier string, statusLog c
 	if n, err := db.UpdateAndSaveStatusLog(stationId, statusLog.RowId, statusLog.ItemName, statusLog.Status, statusLog.ChangedAt.ToTime()); err != nil {
 		slog.Error("Failed to update and save status log", "item_name", statusLog.ItemName, "error", err)
 	} else if n > 0 {
-		err = statusPubSub.Publish(SendMsgStruct{Type: kMsgUpdateItemStatus,
+		hub.Publish(BrokerStatus, SendMsgStruct{Type: kMsgUpdateItemStatus,
 			Body: common.FullItemStatusStruct{
 				StationId:             stationId,
 				Identifier:            identifier,
 				RowIdItemStatusStruct: statusLog,
 			}}, nil)
-		if err != nil {
-			slog.Error("Failed to publish status update", "item_name", statusLog.ItemName, "error", err)
-		}
 	}
 }

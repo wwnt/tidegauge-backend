@@ -1,12 +1,12 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/stretchr/testify/require"
 	"net"
 	"testing"
 	"tide/common"
-	"tide/pkg/pubsub"
 	"tide/tide_server/db"
 )
 
@@ -20,18 +20,18 @@ func Test_handleStationConnStream1(t *testing.T) {
 	conn3, conn4 := net.Pipe() // conn3: sync server   , conn4: sync client
 	defer func() { _ = conn3.Close() }()
 
-	subscriber := pubsub.NewSubscriber(nil, conn3)
-	configPubSub.SubscribeTopic(subscriber, nil)
-	defer configPubSub.Evict(subscriber)
+	subscriber := hub.NewSubscriber(context.Background(), nil, jsonWriter(conn3))
+	hub.Subscribe(BrokerConfig, subscriber, nil)
+	defer hub.Unsubscribe(BrokerConfig, subscriber)
 
-	statusPubSub.SubscribeTopic(subscriber, nil)
-	defer statusPubSub.Evict(subscriber)
+	hub.Subscribe(BrokerStatus, subscriber, nil)
+	defer hub.Unsubscribe(BrokerStatus, subscriber)
 
-	dataPubSub.SubscribeTopic(subscriber, nil)
-	defer dataPubSub.Evict(subscriber)
+	hub.Subscribe(BrokerData, subscriber, nil)
+	defer hub.Unsubscribe(BrokerData, subscriber)
 
-	missDataPubSub.SubscribeTopic(subscriber, nil)
-	defer missDataPubSub.Evict(subscriber)
+	hub.Subscribe(BrokerMissingData, subscriber, nil)
+	defer hub.Unsubscribe(BrokerMissingData, subscriber)
 
 	go func() {
 		mockStationClient(t, conn1, station1Info)
@@ -133,9 +133,6 @@ func mockStationClient(t *testing.T, conn net.Conn, info common.StationInfoStruc
 			},
 		})
 	}
-
-	//dataSub.SubscribeTopic(stream1, nil)
-	//defer dataSub.Evict(stream1)
 
 	// send missData
 	err = encoder.Encode(missData)

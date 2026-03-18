@@ -10,7 +10,6 @@ import (
 
 	"tide/tide_server/auth"
 
-	"github.com/alexedwards/argon2id"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -29,7 +28,7 @@ func NewJwt(db *sql.DB, signingKey []byte, issuer string, expire time.Duration) 
 	return &JwtManager{db: db, signingKey: signingKey, issuer: issuer, expire: expire}
 }
 
-// CheckUserPwd checks username/password against stored Argon2 PHC hash in users.password column.
+// CheckUserPwd checks username/password against stored password hashes in users.password_hash.
 func (j *JwtManager) CheckUserPwd(username, password string) bool {
 	if username == "" || password == "" {
 		return false
@@ -42,11 +41,7 @@ func (j *JwtManager) CheckUserPwd(username, password string) bool {
 	if hash == "" {
 		return false
 	}
-	ok, err := argon2id.ComparePasswordAndHash(password, hash)
-	if err != nil {
-		return false
-	}
-	return ok
+	return verifyPasswordHash(password, hash)
 }
 
 // Login reads username/password from form and returns a JSON token similar to Keycloak's JWT structure.
@@ -128,7 +123,7 @@ func (j *JwtManager) AddUser(user auth.User) error {
 	}
 	user.Username = strings.ToLower(user.Username)
 	user.Email = strings.ToLower(user.Email)
-	pwHash, err := argon2id.CreateHash(user.Password, argon2id.DefaultParams)
+	pwHash, err := createPasswordHash(user.Password)
 	if err != nil {
 		return err
 	}
@@ -164,7 +159,7 @@ func (j *JwtManager) EditUserBaseInfo(user auth.UserBaseInfo) error {
 		}
 		return nil
 	}
-	pwHash, err := argon2id.CreateHash(user.Password, argon2id.DefaultParams)
+	pwHash, err := createPasswordHash(user.Password)
 	if err != nil {
 		return err
 	}
@@ -196,7 +191,7 @@ func (j *JwtManager) EditUser(user auth.User) error {
 		return auth.ErrUserNotFound
 	}
 	if user.Password != "" {
-		pwHash, err := argon2id.CreateHash(user.Password, argon2id.DefaultParams)
+		pwHash, err := createPasswordHash(user.Password)
 		if err != nil {
 			return err
 		}

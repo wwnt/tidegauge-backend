@@ -1,17 +1,26 @@
-[Client's README](tide_client/README.md)
+# TideGauge
 
-[Server's README](tide_server/README.md)
+TideGauge is a monorepo for tide station data collection and central synchronization.
 
-[uart-tcp-forward's README](uart-tcp-forward/README.md)
+## Modules
 
-# Architecture
+- `tide_server/`: central service (API, auth, sync, PostgreSQL).
+- `tide_client/`: edge collector (sensors/camera, SQLite).
+- `uart-tcp-forward/`: serial-to-TCP forwarder for field devices.
+- `arduino/`: firmware and protocol notes.
 
-![Architecture.png](resources/Architecture.png)
+## Sync
 
-# Sync
+- Station sync: `tide_client -> tide_server` (data, status, camera snapshot).
+- Relay sync: `tide_server -> tide_server` (cascade deployments).
+- After connection gaps, missing data is replayed, then realtime sync resumes.
 
-![sync.png](resources/sync.png)
-There are two mechanisms to synchronisation:
-1. Pub/Sub Event Polling, basically downstream deployments poll data from upstreams.
-2. Full DB query when live connection breaks and needs to resync: Last received data time stamp is compared to DB upstreams.
+## Docs
+
+- Documentation index: `docs/README.md`
+- Server guide: `tide_server/README.md`
+- Client guide: `tide_client/README.md`
+- UART forwarder guide: `uart-tcp-forward/README.md`
+- Sync V2 protocol: `docs/protocols/sync-v2-protocol.md`
+- Proto definition: `proto/sync/v2/sync_v2.proto`
 

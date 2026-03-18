@@ -1,36 +1,60 @@
 package controller
 
 import (
+	"errors"
 	"log"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 	"tide/common"
 	"tide/pkg/project"
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
 	"tide/tide_server/global"
 	"tide/tide_server/test"
-
-	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("TIDE_RUN_INTEGRATION_TESTS") == "" {
+		// This package's tests require a real Postgres and the ability to bind/listen on a local port.
+		// Keep them opt-in so `go test ./...` remains unit-test-only by default.
+		os.Exit(0)
+	}
+
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	global.ReadConfig("../config.test.json")
 	global.Config.Debug = true
+	global.Config.Keycloak.BasePath = ""
+	if global.Config.Jwt.Expire <= 0 {
+		global.Config.Jwt.Expire = 3600
+	}
 
 	// slog is already initialized in global.ReadConfig
 	slog.Info("Test environment initialized")
 
-	test.InitDB()
-	test.InitKeycloak(test.AdminUsername, test.AdminPassword, true)
+	cleanupDB, err := test.InitDB()
+	if err != nil {
+		log.Fatal(err)
+	}
 	Init()
+	err = userManager.AddUser(auth.User{
+		UserBaseInfo: auth.UserBaseInfo{
+			Username: test.AdminUsername,
+			Password: test.AdminPassword,
+		},
+		UserAuthority: auth.UserAuthority{
+			Role: auth.SuperAdmin,
+		},
+	})
+	if err != nil && !errors.Is(err, auth.ErrUserDuplicate) {
+		log.Fatal(err)
+	}
 	router = setupRouter()
 	testServer = httptest.NewServer(router)
 
@@ -39,11 +63,12 @@ func TestMain(m *testing.M) {
 	testServer.Close()
 	project.CallReleaseFunc()
 	db.CloseDB()
+	cleanupDB()
 	os.Exit(exitCode)
 }
 
 var (
-	router     *gin.Engine
+	router     http.Handler
 	testServer *httptest.Server
 
 	station1 = db.Station{

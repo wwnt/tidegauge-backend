@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -19,7 +20,10 @@ var stationInfo = common.StationInfoStruct{
 	Devices: make(map[string]map[string]string),
 }
 
-func client(dataSub *pubsub.PubSub) {
+// onvifSnapshot is overridden in tests to avoid binding/listening to real sockets.
+var onvifSnapshot = camera.OnvifSnapshot
+
+func client(dataBroker *pubsub.Broker) {
 	conn, err := net.Dial("tcp", global.Config.Server)
 	if err != nil {
 		return
@@ -27,10 +31,10 @@ func client(dataSub *pubsub.PubSub) {
 	defer func() { _ = conn.Close() }()
 	slog.Info("Connected", "server", global.Config.Server, "local_addr", conn.LocalAddr())
 
-	stationConn(conn, dataSub)
+	stationConn(conn, dataBroker)
 }
 
-func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
+func stationConn(conn net.Conn, dataBroker *pubsub.Broker) {
 	cnf := yamux.DefaultConfig()
 	cnf.EnableKeepAlive = false
 	cnf.ConnectionWriteTimeout = 30 * time.Second
@@ -70,16 +74,18 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 		return
 	}
 	// lock database operation
-	dataReceiveMu.Lock()
+	ingestMu.Lock()
 
 	{
 		var missData = make(map[string][]common.DataTimeStruct)
 		for _, dv := range stationInfo.Devices {
 			for _, itemName := range dv {
-				ds, err := db.GetDataHistory(itemName, itemsLatest[itemName].ToInt64(), 0)
+				// NOTE: custype.UnixMs methods use pointer receivers; map index is not addressable.
+				start := itemsLatest[itemName]
+				ds, err := db.GetDataHistory(itemName, start.ToInt64(), 0)
 				if err != nil {
 					slog.Error("Failed to get data history", "item_name", itemName, "error", err)
-					dataReceiveMu.Unlock()
+					ingestMu.Unlock()
 					return
 				}
 				if len(ds) > 0 {
@@ -90,29 +96,34 @@ func stationConn(conn net.Conn, dataSub *pubsub.PubSub) {
 		// send missData
 		if err = encoder.Encode(missData); err != nil {
 			slog.Error("Failed to send missing data", "error", err)
-			dataReceiveMu.Unlock()
+			ingestMu.Unlock()
 			return
 		}
 
 		missStatusLogs, err := db.GetItemStatusLogAfter(latestStatusLogRowId)
 		if err != nil {
 			slog.Error("Failed to get missing status logs", "after_row_id", latestStatusLogRowId, "error", err)
-			dataReceiveMu.Unlock()
+			ingestMu.Unlock()
 			return
 		}
 		// send missStatusLogs
 		if err = encoder.Encode(missStatusLogs); err != nil {
 			slog.Error("Failed to send missing status logs", "error", err)
-			dataReceiveMu.Unlock()
+			ingestMu.Unlock()
 			return
 		}
 	}
-	subscriber := pubsub.NewSubscriber(session.CloseChan(), stream1)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-session.CloseChan()
+		cancel()
+	}()
+	subscriber := newSubscriber(ctx, func() { _ = session.Close() }, jsonWriter(stream1))
 
-	dataSub.SubscribeTopic(subscriber, nil)
-	defer dataSub.Evict(subscriber)
+	dataBroker.Subscribe(subscriber, nil)
+	defer dataBroker.Unsubscribe(subscriber)
 
-	dataReceiveMu.Unlock()
+	ingestMu.Unlock()
 
 	go func() {
 		defer func() { _ = session.Close() }()
@@ -149,10 +160,45 @@ func cameraSnapshot(conn net.Conn) {
 	if !ok {
 		return
 	}
-	bs, err := camera.OnvifSnapshot(cam.Snapshot, cam.Username, cam.Password)
+	bs, err := onvifSnapshot(cam.Snapshot, cam.Username, cam.Password)
 	if err != nil {
 		slog.Error("Camera snapshot failed", "camera_name", name, "error", err)
 		return
 	}
 	_, _ = conn.Write(bs)
+}
+
+// newSubscriber creates a subscriber. A goroutine reads values from Messages
+// and passes them to write until ctx is canceled, the subscriber is closed,
+// or write returns an error.
+func newSubscriber(ctx context.Context, cancel context.CancelFunc, write func(any) error) *pubsub.Subscriber {
+	subscriber := pubsub.NewSubscriber(1000, cancel)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case val, ok := <-subscriber.Ch:
+				if !ok {
+					return
+				}
+				if write(val) != nil {
+					return
+				}
+			}
+		}
+	}()
+	return subscriber
+}
+
+// jsonWriter returns a write function that JSON-encodes values to w.
+func jsonWriter(w io.Writer) func(any) error {
+	return func(val any) error {
+		b, err := json.Marshal(val)
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(b)
+		return err
+	}
 }

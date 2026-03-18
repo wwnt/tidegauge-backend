@@ -9,7 +9,7 @@ import (
 
 type Status = string
 type MsgType = uint8
-type StringMsecMap = map[string]custype.TimeMillisecond
+type StringMsecMap = map[string]custype.UnixMs
 type StringMapMap = map[string]map[string]string // map[deviceName]map[itemType]itemName
 type UUIDStringsMap = map[uuid.UUID][]string
 
@@ -35,12 +35,12 @@ type RpiStatusStruct struct {
 
 type RpiStatusTimeStruct struct {
 	RpiStatusStruct
-	Millisecond custype.TimeMillisecond `json:"msec"`
+	Millisecond custype.UnixMs `json:"msec"`
 }
 
 type DataTimeStruct struct {
-	Value       float64                 `json:"val"`
-	Millisecond custype.TimeMillisecond `json:"msec"`
+	Value       float64        `json:"val"`
+	Millisecond custype.UnixMs `json:"msec"`
 }
 
 type ItemNameDataTimeStruct struct {
@@ -49,8 +49,8 @@ type ItemNameDataTimeStruct struct {
 }
 
 type StatusChangeStruct struct {
-	Status    Status                  `json:"status"`
-	ChangedAt custype.TimeMillisecond `json:"changed_at"`
+	Status    Status         `json:"status"`
+	ChangedAt custype.UnixMs `json:"changed_at"`
 }
 
 // StationStatusStruct is used for station status change msg

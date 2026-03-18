@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool) {
+func fullSyncConfigClient(conn net.Conn, upstream *upstreamSyncState) (retOk bool) {
 	encoder := json.NewEncoder(conn)
 	decoder := json.NewDecoder(conn)
 
@@ -47,21 +47,21 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 			slog.Error("Failed to sync station", "upstream_id", upstream.config.Id, "station_id", stationFull.Id, "error", err)
 			return
 		} else if n > 0 {
-			Publish(configPubSub, SendMsgStruct{Type: kMsgSyncStation, Body: stationFull.Station}, nil)
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncStation, Body: stationFull.Station}, nil)
 		}
 		// update station's cameras
 		if n, err := db.SyncStationCannotEdit(stationFull.Station.Id, stationFull.Station.Cameras); err != nil {
 			slog.Error("Failed to sync station cameras", "station_id", stationFull.Station.Id, "error", err)
 			return
 		} else if n > 0 {
-			Publish(configPubSub, SendMsgStruct{Type: kMsgSyncStationCannotEdit, Body: stationFull.Station}, nil)
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncStationCannotEdit, Body: stationFull.Station}, nil)
 		}
 		// update station's status
 		if n, err := db.UpdateStationStatus(stationFull.Id, stationFull.Status, stationFull.StatusChangedAt.ToTime()); err != nil {
 			slog.Error("Failed to update station status", "station_id", stationFull.Id, "error", err)
 			return
 		} else if n > 0 {
-			Publish(configPubSub, SendMsgStruct{Type: kMsgUpdateStationStatus, Body: common.StationStatusStruct{
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgUpdateStationStatus, Body: common.StationStatusStruct{
 				StationId:          stationFull.Id,
 				Identifier:         stationFull.Identifier,
 				StatusChangeStruct: common.StatusChangeStruct{Status: stationFull.Status, ChangedAt: stationFull.StatusChangedAt},
@@ -75,7 +75,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 				slog.Error("Failed to sync device", "device_name", device.Name, "station_id", device.StationId, "error", err)
 				return
 			} else if n > 0 {
-				Publish(configPubSub, SendMsgStruct{Type: kMsgSyncDevice, Body: device}, nil)
+				hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncDevice, Body: device}, nil)
 			} //If there is no update, there is no need to publish
 		}
 		for _, device := range oldDs {
@@ -84,7 +84,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 					slog.Error("Failed to delete device", "device_name", device.Name, "station_id", device.StationId, "error", err)
 					return
 				} else if n > 0 {
-					Publish(configPubSub, SendMsgStruct{Type: kMsgDelDevice, Body: device}, nil)
+					hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgDelDevice, Body: device}, nil)
 				} //If there is no update, there is no need to publish
 			}
 		}
@@ -96,7 +96,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 				slog.Error("Failed to sync item", "item_name", item.Name, "station_id", item.StationId, "error", err)
 				return
 			} else if n > 0 {
-				Publish(configPubSub, SendMsgStruct{Type: kMsgSyncItem, Body: item}, nil)
+				hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncItem, Body: item}, nil)
 			} //If there is no update, there is no need to publish
 		}
 		for _, item := range oldIs {
@@ -105,7 +105,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 					slog.Error("Failed to delete item", "item_name", item.Name, "station_id", item.StationId, "error", err)
 					return
 				} else if n > 0 {
-					Publish(configPubSub, SendMsgStruct{Type: kMsgDelItem, Body: item}, nil)
+					hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgDelItem, Body: item}, nil)
 				} //If there is no update, there is no need to publish
 			}
 		}
@@ -116,7 +116,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 				slog.Error("Failed to delete upstream station", "upstream_id", upstream.config.Id, "station_id", station.Id, "error", err)
 				return
 			} else if n > 0 {
-				Publish(configPubSub, SendMsgStruct{Type: kMsgDelUpstreamStation, Body: station.Id}, nil)
+				hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgDelUpstreamStation, Body: station.Id}, nil)
 			} //If there is no update, there is no need to publish
 		}
 	}
@@ -131,7 +131,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 			slog.Error("Failed to sync device record", "device_record_id", dr.Id, "error", err)
 			return
 		} else if n > 0 {
-			Publish(configPubSub, SendMsgStruct{Type: kMsgEditDeviceRecord, Body: dr}, nil)
+			hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgEditDeviceRecord, Body: dr}, nil)
 		} //If there is no update, there is no need to publish
 	}
 
@@ -177,7 +177,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 				slog.Error("Failed to save item status log", "station_id", stationId, "item_name", statusLog.ItemName, "error", err)
 				return
 			} else if n > 0 {
-				Publish(configPubSub, SendMsgStruct{Type: kMsgMissItemStatus, Body: common.FullItemStatusStruct{
+				hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgMissItemStatus, Body: common.FullItemStatusStruct{
 					StationId:             stationId,
 					RowIdItemStatusStruct: statusLog,
 				}}, nil)
@@ -187,7 +187,7 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamStorage) (retOk bool)
 	return true
 }
 
-func incrementSyncConfigClient(conn net.Conn, upstream *upstreamStorage) {
+func incrementSyncConfigClient(conn net.Conn, state *upstreamSyncState) {
 	var (
 		decoder = json.NewDecoder(conn)
 		msg     RcvMsgStruct
@@ -199,13 +199,13 @@ func incrementSyncConfigClient(conn net.Conn, upstream *upstreamStorage) {
 			}
 			break
 		}
-		if !handleSyncConfigMsg(msg, upstream) {
+		if !handleSyncConfigMsg(msg, state) {
 			return
 		}
 	}
 }
 
-func handleSyncConfigMsg(msg RcvMsgStruct, upstream *upstreamStorage) (retOk bool) {
+func handleSyncConfigMsg(msg RcvMsgStruct, upstream *upstreamSyncState) (retOk bool) {
 	var (
 		err error
 		n   int64
@@ -314,10 +314,11 @@ func handleSyncConfigMsg(msg RcvMsgStruct, upstream *upstreamStorage) (retOk boo
 			slog.Error("Failed to update and save item status log", "station_id", body.StationId, "item_name", body.ItemName, "error", err)
 			return
 		}
-	// establish connection
-	// change sync user permission
-	// upstream relay
-	// add item
+	// kMsgUpdateAvailable 的来源：
+	// 1) 初次建立同步连接时的可用项快照：sync_server.handleSyncServerConn()
+	// 2) 同步用户权限变更后：sync_hub.UpdatePermissions()
+	// 3) 作为下游时从上游转发而来：handleSyncConfigMsg()
+	// 4) 检测到新增 item 后：station_sync_func.SyncStationInfo() -> sync_hub.BroadcastAddItems() -> sync_hub.BroadcastAvailableChange()
 	case kMsgUpdateAvailable:
 		var body common.UUIDStringsMap
 		if err = json.Unmarshal(msg.Body, &body); err != nil {
@@ -330,16 +331,19 @@ func handleSyncConfigMsg(msg RcvMsgStruct, upstream *upstreamStorage) (retOk boo
 			return
 		}
 		if n > 0 {
-			handleAvailableChange(body)
+			hub.BroadcastAvailableChange(body)
 			return true
 		}
 	}
 	if n > 0 {
+		// Convert RcvMsgStruct to SendMsgStruct so v2 consumers can type-assert.
+		// Body remains json.RawMessage, which json.Marshal passes through as-is.
+		sendMsg := SendMsgStruct{Type: msg.Type, Body: msg.Body}
 		switch msg.Type {
 		case kMsgUpdateStationStatus, kMsgUpdateItemStatus:
-			Publish(statusPubSub, msg, nil)
+			hub.Publish(BrokerStatus, sendMsg, nil)
 		default:
-			Publish(configPubSub, msg, nil)
+			hub.Publish(BrokerConfig, sendMsg, nil)
 		}
 	}
 	return true

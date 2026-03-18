@@ -1,3 +1,5 @@
+//go:build linux
+
 package device
 
 import (
@@ -33,10 +35,11 @@ func (doorIntrusionDetection) NewDevice(conn any, rawConf json.RawMessage) commo
 	ll, err := gpio.RequestLines([]int{conf.Pin}, gpiocdev.WithPullDown, gpiocdev.WithBothEdges,
 		gpiocdev.WithDebounce(time.Millisecond*10),
 		gpiocdev.WithEventHandler(func(evt gpiocdev.LineEvent) {
+			at := nowMs()
 			if evt.Type == gpiocdev.LineEventRisingEdge {
-				DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &doorOpen}}
+				DataReceive <- []itemData{{At: at, Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &doorOpen}}
 			}
-			DataReceive <- []itemData{{Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &doorClose}}
+			DataReceive <- []itemData{{At: at, Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &doorClose}}
 		}))
 	if err != nil {
 		if errors.Is(err, syscall.Errno(22)) {

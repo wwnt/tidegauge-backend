@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func addRpiStatus(dataPub *pubsub.PubSub) {
+func addRpiStatus(dataBroker *pubsub.Broker) {
 	if _, err := rpiStat(); err == nil {
 		_, err = global.CronJob.AddFunc("@every 60s",
 			func() {
@@ -21,16 +21,12 @@ func addRpiStatus(dataPub *pubsub.PubSub) {
 					slog.Error("Failed to get raspberry pi status", "error", err)
 					return
 				}
-				err = dataPub.Publish(common.SendMsgStruct{
+				dataBroker.Publish(common.SendMsgStruct{
 					Type: common.MsgRpiStatus,
 					Body: common.RpiStatusTimeStruct{
 						RpiStatusStruct: data,
-						Millisecond:     custype.ToTimeMillisecond(time.Now()),
+						Millisecond:     custype.ToUnixMs(time.Now()),
 					}}, nil)
-				if err != nil {
-					slog.Error("Failed to publish raspberry pi status message", "error", err)
-					return
-				}
 			},
 		)
 		if err != nil {

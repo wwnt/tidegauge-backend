@@ -3,11 +3,12 @@ package db
 import (
 	"database/sql"
 	"errors"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"tide/common"
 	"tide/pkg/custype"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func GetItemsLatest(stationId uuid.UUID, itemsLatest common.StringMsecMap) error {
@@ -26,13 +27,13 @@ func GetItemsLatest(stationId uuid.UUID, itemsLatest common.StringMsecMap) error
 			return err
 		}
 		if t.Valid {
-			itemsLatest[itemName] = custype.ToTimeMillisecond(t.Time)
+			itemsLatest[itemName] = custype.ToUnixMs(t.Time)
 		}
 	}
 	return nil
 }
 
-func GetDataHistory(stationId uuid.UUID, itemName string, start, end custype.TimeMillisecond) ([]common.DataTimeStruct, error) {
+func GetDataHistory(stationId uuid.UUID, itemName string, start, end custype.UnixMs) ([]common.DataTimeStruct, error) {
 	if common.ContainsIllegalCharacter(itemName) {
 		return nil, errors.New("Table name contains illegal characters: " + itemName)
 	}
@@ -83,7 +84,7 @@ func SaveDataHistory(stationId uuid.UUID, itemName string, itemValue float64, tm
 	return checkResult(res, err)
 }
 
-func GetLatestDataTime(stationId uuid.UUID, itemName string) (ts custype.TimeMillisecond, err error) {
+func GetLatestDataTime(stationId uuid.UUID, itemName string) (ts custype.UnixMs, err error) {
 	if common.ContainsIllegalCharacter(itemName) {
 		return 0, errors.New("Table name contains illegal characters: " + itemName)
 	}

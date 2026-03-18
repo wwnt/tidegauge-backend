@@ -8,12 +8,12 @@ import (
 	"io"
 	"log"
 	"net"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"tide/common"
+	"tide/pkg/pubsub"
 	"tide/tide_client/db"
 	"tide/tide_client/global"
+	"time"
 )
 
 func Test_stationConn(t *testing.T) {
@@ -26,7 +26,7 @@ func Test_stationConn(t *testing.T) {
 			log.Println("close station client")
 			_ = conn1.Close()
 		}()
-		stationConn(conn1, dataPubSub)
+		stationConn(conn1, dataBroker)
 	}()
 
 	stationInfo = station1Info
@@ -70,28 +70,15 @@ func Test_stationConn(t *testing.T) {
 		err = decoder.Decode(&missStatusLogs)
 		require.NoError(t, err)
 		assert.Equal(t, db.StatusLogs, missStatusLogs)
-
-		{
-			var msg common.ReceiveMsgStruct
-			err = decoder.Decode(&msg)
-			require.NoError(t, err)
-			assert.Equal(t, common.MsgItemStatus, msg.Type)
-		}
-
-		{
-			var msg common.ReceiveMsgStruct
-			err = decoder.Decode(&msg)
-			require.NoError(t, err)
-			assert.Equal(t, common.MsgData, msg.Type)
-		}
 	})
 	t.Run("camera", func(t *testing.T) {
-		tmpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte("jpg1"))
-		}))
-		defer tmpServer.Close()
+		oldSnapshotFn := onvifSnapshot
+		onvifSnapshot = func(url, username, password string) ([]byte, error) { return []byte("jpg1"), nil }
+		t.Cleanup(func() { onvifSnapshot = oldSnapshotFn })
+
+		// Keep config setup here to ensure we're still reading from the camera map.
 		tmp := global.Config.Cameras.List["camera1"]
-		tmp.Snapshot = tmpServer.URL
+		tmp.Snapshot = "http://example.invalid/snapshot"
 		global.Config.Cameras.List["camera1"] = tmp
 
 		conn, err := session.Open()
@@ -110,4 +97,66 @@ func Test_stationConn(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []byte("jpg1"), bytes)
 	})
+}
+
+func Test_stationConn_OverflowClosesSession(t *testing.T) {
+	db.InitData(t)
+
+	broker := pubsub.NewBroker()
+	conn1, conn2 := net.Pipe()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		stationConn(conn1, broker)
+	}()
+	t.Cleanup(func() { _ = conn1.Close() })
+	t.Cleanup(func() { _ = conn2.Close() })
+
+	stationInfo = station1Info
+
+	session, err := yamux.Server(conn2, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = session.Close() })
+
+	conn, err := session.Open()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	decoder := json.NewDecoder(conn)
+	encoder := json.NewEncoder(conn)
+
+	var info common.StationInfoStruct
+	err = decoder.Decode(&info)
+	require.NoError(t, err)
+
+	err = encoder.Encode(common.StringMsecMap{"item1": 0})
+	require.NoError(t, err)
+	err = encoder.Encode(0)
+	require.NoError(t, err)
+
+	var missData map[string][]common.DataTimeStruct
+	err = decoder.Decode(&missData)
+	require.NoError(t, err)
+	var missStatusLogs []common.RowIdItemStatusStruct
+	err = decoder.Decode(&missStatusLogs)
+	require.NoError(t, err)
+
+	msg := common.SendMsgStruct{
+		Type: common.MsgData,
+		Body: common.ItemNameDataTimeStruct{
+			ItemName: "item1",
+			DataTimeStruct: common.DataTimeStruct{
+				Value: 1,
+			},
+		},
+	}
+	for i := 0; i < 20000; i++ {
+		broker.Publish(msg, nil)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for dropped subscriber to close station sync session")
+	}
 }

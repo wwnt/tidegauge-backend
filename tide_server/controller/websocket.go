@@ -1,89 +1,113 @@
 package controller
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"tide/common"
 	"tide/pkg/pubsub"
-	"tide/pkg/wsutil"
 	"tide/tide_server/auth"
 
-	"github.com/gin-gonic/gin"
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 )
 
 const (
 	// Time allowed to write the file to the client.
-	writeWait = 5 * time.Second
+	wsStatusUnauthorized        websocket.StatusCode = 4001
+	wsStatusInternalServerError websocket.StatusCode = 4002
 )
 
-var (
-	wsUnauthorized        = websocket.FormatCloseMessage(4001, http.StatusText(http.StatusUnauthorized))
-	wsInternalServerError = websocket.FormatCloseMessage(4002, http.StatusText(http.StatusInternalServerError))
-)
+const wsWriteTimeout = 5 * time.Second
 
-func DataWebsocket(c *gin.Context) {
-	var (
-		err      error
-		wsw      = c.MustGet(contextKeyWsConn).(wsutil.WsWrap)
-		username = c.GetString(contextKeyUsername)
-	)
+func wsHubJSONWriter(ctx context.Context, ws *websocket.Conn) func(any) error {
+	return func(val any) error {
+		writeCtx, cancel := context.WithTimeout(ctx, wsWriteTimeout)
+		defer cancel()
+		return wsjson.Write(writeCtx, ws, val)
+	}
+}
 
-	subscriber := pubsub.NewSubscriber(c.Request.Context().Done(), wsw)
+func DataWebsocket(w http.ResponseWriter, r *http.Request) {
+	wsw, ok := requestWSConn(r)
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	username := requestUsername(r)
 
-	addUserConn(username, subscriber, connTypeWebBrowser)
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	subscriber := hub.NewSubscriber(ctx, cancel, wsHubJSONWriter(ctx, wsw))
+	go func() { <-ctx.Done(); _ = wsw.CloseNow() }()
+	hub.TrackSubscriber(username, subscriber, connTypeWebBrowser)
 	defer func() {
-		delUserConn(username, subscriber)
-		dataPubSub.Evict(subscriber)
+		hub.UntrackSubscriber(username, subscriber)
+		hub.Unsubscribe(BrokerData, subscriber)
 	}()
-	go wsw.Ping(c.Request.Context().Done())
 
 	// reader
 	for {
 		var msg map[uuid.UUID][]string
-		if err = wsw.ReadJSON(&msg); err != nil {
+		if err := wsjson.Read(ctx, wsw, &msg); err != nil {
 			return
 		}
 		if len(msg) == 0 {
-			dataPubSub.Evict(subscriber)
+			hub.Unsubscribe(BrokerData, subscriber)
 			continue
 		}
-		if c.GetInt(contextKeyRole) < auth.Admin {
+		if requestRole(r) < auth.Admin {
 			// user need to check the permissions
 			for stationId, items := range msg {
 				for _, itemName := range items {
 					if !authorization.CheckPermission(username, stationId, itemName) {
-						_ = wsw.WriteControl(websocket.CloseMessage, wsUnauthorized, time.Now().Add(writeWait))
+						_ = wsw.Close(wsStatusUnauthorized, http.StatusText(http.StatusUnauthorized))
 						return
 					}
 				}
 			}
 		}
-		topics := make(pubsub.TopicMap)
+		subscribedTopics := make(pubsub.TopicSet)
 		for stationId, items := range msg {
 			for _, item := range items {
-				topics[common.StationItemStruct{StationId: stationId, ItemName: item}] = struct{}{}
+				subscribedTopics[common.StationItemStruct{StationId: stationId, ItemName: item}] = struct{}{}
 			}
 		}
-		dataPubSub.SubscribeTopic(subscriber, topics)
+		hub.Subscribe(BrokerData, subscriber, subscribedTopics)
 	}
 }
 
-func GlobalWebsocket(c *gin.Context) {
-	wsw := c.MustGet(contextKeyWsConn).(wsutil.WsWrap)
-
-	subscriber := pubsub.NewSubscriber(c.Request.Context().Done(), wsw)
-
-	defer statusPubSub.Evict(subscriber)
-	statusPubSub.SubscribeTopic(subscriber, nil)
-
-	go wsw.Ping(c.Request.Context().Done())
-	// reader
-	for {
-		if _, _, err := wsw.ReadMessage(); err != nil {
-			return
-		}
+func GlobalWebsocket(w http.ResponseWriter, r *http.Request) {
+	wsw, ok := requestWSConn(r)
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+	username := requestUsername(r)
+
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+
+	go func() {
+		defer cancel()
+		for {
+			if _, _, err := wsw.Read(ctx); err != nil {
+				return
+			}
+		}
+	}()
+
+	subscriber := hub.NewSubscriber(ctx, cancel, wsHubJSONWriter(ctx, wsw))
+	hub.TrackSubscriber(username, subscriber, connTypeWebBrowser)
+	defer func() {
+		hub.UntrackSubscriber(username, subscriber)
+		hub.Unsubscribe(BrokerStatus, subscriber)
+	}()
+
+	hub.Subscribe(BrokerStatus, subscriber, nil)
+
+	<-ctx.Done()
 }

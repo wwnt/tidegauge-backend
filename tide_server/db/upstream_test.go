@@ -1,144 +1,40 @@
 package db
 
-import (
-	"fmt"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"testing"
-)
-
-func TestDelUpstream(t *testing.T) {
-	initData(t)
-	type args struct {
-		id int
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    []uuid.UUID
-		wantErr assert.ErrorAssertionFunc
-	}{
-		{name: "del1", args: args{id: upstream1.Id}, want: nil, wantErr: assert.NoError},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := DelUpstream(tt.args.id)
-			if !tt.wantErr(t, err, fmt.Sprintf("DelUpstream(%v)", tt.args.id)) {
-				return
-			}
-			assert.Equalf(t, tt.want, got, "DelUpstream(%v)", tt.args.id)
-		})
-	}
+func (s *dbSuite) TestDelUpstream() {
+	got, err := DelUpstream(upstream1.Id)
+	s.Require().NoError(err)
+	s.Nil(got)
 }
 
-func TestEditUpstream(t *testing.T) {
-	initData(t)
-	type args struct {
-		up *Upstream
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr assert.ErrorAssertionFunc
-	}{
-		{name: "update", args: args{up: &upstream1}, wantErr: assert.NoError},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.wantErr(t, EditUpstream(tt.args.up), fmt.Sprintf("EditUpstream(%v)", tt.args.up))
-		})
-	}
+func (s *dbSuite) TestEditUpstream() {
+	err := EditUpstream(&upstream1)
+	s.Require().NoError(err)
 }
 
-func TestGetStationsByUpstreamId(t *testing.T) {
-	initData(t)
-	upstream1Station1.Upstream = false
-	type args struct {
-		upstreamId int
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    []Station
-		wantErr assert.ErrorAssertionFunc
-	}{
-		{name: "get", args: args{upstreamId: upstream1.Id}, want: []Station{upstream1Station1}, wantErr: assert.NoError},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetStationsByUpstreamId(tt.args.upstreamId)
-			if !tt.wantErr(t, err, fmt.Sprintf("GetStationsByUpstreamId(%v)", tt.args.upstreamId)) {
-				return
-			}
-			assert.Equalf(t, tt.want, got, "GetStationsByUpstreamId(%v)", tt.args.upstreamId)
-		})
-	}
+func (s *dbSuite) TestGetStationsByUpstreamId() {
+	// GetStationsByUpstreamId does not return the Upstream bool field.
+	tmp := upstream1Station1
+	tmp.Upstream = false
+
+	got, err := GetStationsByUpstreamId(upstream1.Id)
+	s.Require().NoError(err)
+	s.Equal([]Station{tmp}, got)
 }
 
-func TestGetUpstreams(t *testing.T) {
-	initData(t)
-	tests := []struct {
-		name    string
-		want    []Upstream
-		wantErr assert.ErrorAssertionFunc
-	}{
-		{name: "get", want: []Upstream{upstream1, upstream2}, wantErr: assert.NoError},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetUpstreams()
-			if !tt.wantErr(t, err, fmt.Sprintf("GetUpstreams()")) {
-				return
-			}
-			assert.Equalf(t, tt.want, got, "GetUpstreams()")
-		})
-	}
+func (s *dbSuite) TestGetUpstreams() {
+	got, err := GetUpstreams()
+	s.Require().NoError(err)
+	s.ElementsMatch([]Upstream{upstream1, upstream2}, got)
 }
 
-func TestGetUpstreamsByStationId(t *testing.T) {
-	initData(t)
-	type args struct {
-		stationId uuid.UUID
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    []Upstream
-		wantErr assert.ErrorAssertionFunc
-	}{
-		{name: "get", args: args{stationId: upstream1Station1.Id}, want: []Upstream{upstream1, upstream2}, wantErr: assert.NoError},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetUpstreamsByStationId(tt.args.stationId)
-			if !tt.wantErr(t, err, fmt.Sprintf("GetUpstreamsByStationId(%v)", tt.args.stationId)) {
-				return
-			}
-			assert.Equalf(t, tt.want, got, "GetUpstreamsByStationId(%v)", tt.args.stationId)
-		})
-	}
+func (s *dbSuite) TestGetUpstreamsByStationId() {
+	got, err := GetUpstreamsByStationId(upstream1Station1.Id)
+	s.Require().NoError(err)
+	s.ElementsMatch([]Upstream{upstream1, upstream2}, got)
 }
 
-func TestIsUpstreamStation(t *testing.T) {
-	initData(t)
-	type args struct {
-		stationId uuid.UUID
-	}
-	tests := []struct {
-		name         string
-		args         args
-		wantUpstream bool
-		wantErr      assert.ErrorAssertionFunc
-	}{
-		{name: "get", args: args{stationId: upstream1Station1.Id}, wantUpstream: true, wantErr: assert.NoError},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotUpstream, err := IsUpstreamStation(tt.args.stationId)
-			if !tt.wantErr(t, err, fmt.Sprintf("IsUpstreamStation(%v)", tt.args.stationId)) {
-				return
-			}
-			assert.Equalf(t, tt.wantUpstream, gotUpstream, "IsUpstreamStation(%v)", tt.args.stationId)
-		})
-	}
+func (s *dbSuite) TestIsUpstreamStation() {
+	got, err := IsUpstreamStation(upstream1Station1.Id)
+	s.Require().NoError(err)
+	s.True(got)
 }

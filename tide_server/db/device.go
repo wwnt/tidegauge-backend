@@ -3,26 +3,27 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
-	"github.com/google/uuid"
 	"tide/pkg/custype"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type (
 	Device struct {
-		StationId       uuid.UUID               `json:"station_id" binding:"required"`
-		Name            string                  `json:"name" binding:"required"`
-		Specs           json.RawMessage         `json:"specs"`
-		LastMaintenance custype.TimeMillisecond `json:"last_maintenance"`
+		StationId       uuid.UUID       `json:"station_id" binding:"required"`
+		Name            string          `json:"name" binding:"required"`
+		Specs           json.RawMessage `json:"specs"`
+		LastMaintenance custype.UnixMs  `json:"last_maintenance"`
 	}
 	DeviceRecord struct {
-		Id         uuid.UUID               `json:"id"`
-		StationId  uuid.UUID               `json:"station_id" binding:"required"`
-		DeviceName string                  `json:"device_name" binding:"required"`
-		Record     string                  `json:"record"`
-		CreatedAt  custype.TimeMillisecond `json:"created_at"`
-		UpdatedAt  custype.TimeMillisecond `json:"updated_at"`
-		Version    int                     `json:"version,omitempty"`
+		Id         uuid.UUID      `json:"id"`
+		StationId  uuid.UUID      `json:"station_id" binding:"required"`
+		DeviceName string         `json:"device_name" binding:"required"`
+		Record     string         `json:"record"`
+		CreatedAt  custype.UnixMs `json:"created_at"`
+		UpdatedAt  custype.UnixMs `json:"updated_at"`
+		Version    int            `json:"version,omitempty"`
 	}
 )
 
@@ -116,13 +117,13 @@ func EditDeviceRecord(dr *DeviceRecord) (err error) {
 		if dr.Id, err = uuid.NewUUID(); err != nil {
 			return err
 		}
-		dr.CreatedAt = custype.ToTimeMillisecond(time.Now())
+		dr.CreatedAt = custype.ToUnixMs(time.Now())
 		dr.UpdatedAt = dr.CreatedAt
 		dr.Version = 1
 		_, err = TideDB.Exec("insert into device_record(id,station_id,device_name,record,created_at,updated_at,upstream_version,version) VALUES ($1,$2,$3,$4,$5,$5,0,1)",
 			dr.Id, dr.StationId, dr.DeviceName, dr.Record, dr.CreatedAt)
 	} else {
-		dr.UpdatedAt = custype.ToTimeMillisecond(time.Now())
+		dr.UpdatedAt = custype.ToUnixMs(time.Now())
 		err = TideDB.QueryRow("update device_record set record=$2, updated_at=$3, version=version+1 where id=$1 returning version", dr.Id, dr.Record, dr.UpdatedAt).Scan(&dr.Version)
 	}
 	return err

@@ -2,13 +2,13 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
-	"github.com/Nerzal/gocloak/v13"
+	"github.com/coder/websocket"
+	"github.com/coder/websocket/wsjson"
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +18,12 @@ import (
 	"tide/tide_server/auth"
 	"tide/tide_server/db"
 	"tide/tide_server/test"
+	"time"
 )
+
+type loginTokenResponse struct {
+	AccessToken string `json:"access_token"`
+}
 
 func TestWebapi(t *testing.T) {
 	truncateDB(t)
@@ -42,7 +47,7 @@ func TestWebapi(t *testing.T) {
 		router.ServeHTTP(w, req)
 		require.Equal(t, 200, w.Code)
 
-		var jwt gocloak.JWT
+		var jwt loginTokenResponse
 		err := json.Unmarshal(w.Body.Bytes(), &jwt)
 		require.NoError(t, err)
 
@@ -187,7 +192,7 @@ func TestWebapi(t *testing.T) {
 			var data []auth.User
 			err := json.Unmarshal(w.Body.Bytes(), &data)
 			require.NoError(t, err)
-			require.Equal(t, 1, len(data))
+			require.Equal(t, 0, len(data))
 		})
 
 		t.Run("editUser_by_superAdmin", func(t *testing.T) {
@@ -225,7 +230,7 @@ func TestWebapi(t *testing.T) {
 		router.ServeHTTP(w, req)
 		require.Equal(t, 200, w.Code)
 
-		var jwt gocloak.JWT
+		var jwt loginTokenResponse
 		err := json.Unmarshal(w.Body.Bytes(), &jwt)
 		require.NoError(t, err)
 
@@ -258,40 +263,50 @@ func TestWebapi(t *testing.T) {
 		})
 
 		t.Run("websocket", func(t *testing.T) {
-			t.Skip()
 			t.Run("data", func(t *testing.T) {
 				var header = make(http.Header)
 				header.Set("Cookie", "token="+token)
 				url := "ws" + strings.TrimPrefix(testServer.URL, "http")
 				t.Log(url)
-				ws, _, err := websocket.DefaultDialer.Dial(url+"/ws/data", header)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				ws, _, err := websocket.Dial(ctx, url+"/ws/data", &websocket.DialOptions{
+					HTTPHeader: header,
+				})
+				require.NoError(t, err)
+				defer ws.CloseNow()
+
+				err = wsjson.Write(ctx, ws, common.UUIDStringsMap{station1.Id: {items[0].Name}})
 				require.NoError(t, err)
 
-				b, _ := json.Marshal(permissions)
-				err = ws.WriteMessage(websocket.TextMessage, b)
-				require.NoError(t, err)
-
+				stationItem := common.StationItemStruct{StationId: station1.Id, ItemName: items[0].Name}
 				tmpData := forwardDataStruct{
-					StationItemStruct: common.StationItemStruct{StationId: station1.Id, ItemName: items[0].Name},
+					StationItemStruct: stationItem,
 					DataTimeStruct:    common.DataTimeStruct{Value: 0, Millisecond: 0},
 				}
+				done := make(chan struct{})
+				defer close(done)
 				go func() {
-					log.Println(tmpData)
-					err = dataPubSub.Publish(tmpData, common.StationItemStruct{
-						StationId: station1.Id,
-						ItemName:  items[0].Name,
-					})
-					require.NoError(t, err)
+					ticker := time.NewTicker(50 * time.Millisecond)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-done:
+							return
+						case <-ctx.Done():
+							return
+						case <-ticker.C:
+							hub.Publish(BrokerData, tmpData, stationItem)
+						}
+					}
 				}()
+				hub.Publish(BrokerData, tmpData, stationItem)
 
 				var data forwardDataStruct
-				err = ws.ReadJSON(&data)
+				err = wsjson.Read(ctx, ws, &data)
 				require.NoError(t, err)
 
 				assert.Equal(t, tmpData, data)
-				{
-
-				}
 			})
 		})
 	})

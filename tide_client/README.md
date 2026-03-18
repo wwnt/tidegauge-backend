@@ -7,6 +7,7 @@
 * [4. Init sqlite database tables](#4-init-sqlite-database-tables)
 * [5. Build client on wsl2 or Linux](#5-build-client-on-wsl2-or-linux)
 * [6. Install as service](#6-install-as-service)
+* [6.1 Enable Sync v2](#61-enable-sync-v2)
 * [7. Determine location of the usb serial device](#7-determine-location-of-the-usb-serial-device)
   * [7.1. Checkout which id is the USB serial device we just inserted](#71-checkout-which-id-is-the-usb-serial-device-we-just-inserted)
 * [8. Sensor Init](#8-sensor-init)
@@ -113,6 +114,39 @@ sudo cp tidegauge.service /etc/systemd/system
 ```
 
 Then start the service `sudo systemctl enable --now tidegauge.service`
+
+# 6.1 Enable Sync v2
+
+Add `sync_v2` in `config.json` to use the new interface:
+
+```json
+{
+  "sync_v2": {
+    "enabled": true,
+    "addr": "http://server.example.com:7100"
+  }
+}
+```
+
+`sync_v2.addr` must include the scheme, for example `http://server.example.com:7100`.
+
+Runtime behavior:
+
+- if `sync_v2.enabled=false` or `sync_v2.addr` is empty, the client uses legacy v1 sync
+- if v2 is enabled, the client keeps retrying the v2 session every 3 seconds after disconnect
+- a failed v2 connection does not automatically switch the process back to v1
+
+Code layout:
+
+- `tide_client/controller/common.go` starts the sync loop
+- `tide_client/controller/sync_v2.go` wires database, pubsub and camera dependencies into the v2 client
+- `tide_client/syncv2/*` owns the v2 protocol session, replay and realtime forwarding
+
+Related docs:
+
+- [Client config reference](../docs/client/config-reference.md)
+- [Reverse SSH tunnel guide](../docs/client/reverse-ssh-tunnel.md)
+- [SDI-12 noise mitigation](../docs/client/sdi-12-noise-mitigation.md)
 
 # 7. Determine location of the usb serial device
 

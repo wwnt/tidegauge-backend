@@ -1,12 +1,15 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"testing"
 
 	"tide/common"
+	"tide/tide_server/auth"
 	"tide/tide_server/db"
 
 	"github.com/google/uuid"
@@ -17,12 +20,24 @@ import (
 func Test_handleSyncServerConn(t *testing.T) {
 	truncateDB(t)
 
+	username := "user01"
+	err := userManager.AddUser(user01)
+	if err != nil && !errors.Is(err, auth.ErrUserDuplicate) {
+		require.NoError(t, err)
+	}
+	initialPermissions := common.UUIDStringsMap{
+		station1.Id: {"location1_air_humidity"},
+	}
+	updatedPermissions := common.UUIDStringsMap{
+		station1.Id: {"location1_air_visibility"},
+	}
+	require.NoError(t, authorization.EditPermission(username, initialPermissions))
+
 	conn1, conn2 := net.Pipe() // conn3: sync server   , conn4: sync client
 
-	username := "user01"
 	go func() {
 		defer func() { _ = conn1.Close() }()
-		handleSyncServerConn(conn1, username, permissions)
+		handleSyncServerConn(context.Background(), conn1, username, initialPermissions)
 	}()
 
 	session, err := yamux.Client(conn2, nil)
@@ -80,20 +95,12 @@ func Test_handleSyncServerConn(t *testing.T) {
 	encoder = json.NewEncoder(stream4)
 	decoder = json.NewDecoder(stream4)
 
-	var permissions common.UUIDStringsMap
-	err = decoder.Decode(&permissions)
+	var firstPermissions common.UUIDStringsMap
+	err = decoder.Decode(&firstPermissions)
 	require.NoError(t, err)
-	slog.Debug("Permissions in test", "data", permissions)
+	require.Equal(t, initialPermissions, firstPermissions)
 
 	var stationsItemsLatest = make(map[uuid.UUID]common.StringMsecMap)
-	for stationId, items := range permissions {
-		var itemsLatest = make(common.StringMsecMap)
-		for _, itemName := range items {
-			itemsLatest[itemName] = 1
-		}
-
-		stationsItemsLatest[stationId] = itemsLatest
-	}
 	err = encoder.Encode(stationsItemsLatest)
 	require.NoError(t, err)
 
@@ -101,13 +108,79 @@ func Test_handleSyncServerConn(t *testing.T) {
 	err = decoder.Decode(&stationsMissData)
 	require.NoError(t, err)
 	slog.Debug("Stations miss data in test", "data", stationsMissData)
+	_ = stream4.Close()
 
+	require.NoError(t, authorization.EditPermission(username, updatedPermissions))
+	hub.UpdatePermissions(username, updatedPermissions)
+	_ = stream3.Close()
+
+	stream3, err = session.Open()
+	require.NoError(t, err)
+	stream4, err = session.Open()
+	require.NoError(t, err)
+	encoder = json.NewEncoder(stream4)
+	decoder = json.NewDecoder(stream4)
+
+	var refreshedPermissions common.UUIDStringsMap
+	err = decoder.Decode(&refreshedPermissions)
+	require.NoError(t, err)
+	require.Equal(t, updatedPermissions, refreshedPermissions)
+
+	err = encoder.Encode(stationsItemsLatest)
+	require.NoError(t, err)
+	err = decoder.Decode(&stationsMissData)
+	require.NoError(t, err)
 	_ = stream4.Close()
 	_ = stream3.Close()
 
-	//syncDataClient(stream3)
-	//_ = stream3.Close()
-
-	//incrementSyncConfigClient(stream1, upstream)
 	_ = stream1.Close()
+}
+
+type permissionLoaderErrStub struct {
+	getPermissionsErr error
+}
+
+func (s *permissionLoaderErrStub) CheckPermission(string, uuid.UUID, string) bool {
+	return false
+}
+
+func (s *permissionLoaderErrStub) GetPermissions(string) (map[uuid.UUID][]string, error) {
+	return nil, s.getPermissionsErr
+}
+
+func (s *permissionLoaderErrStub) EditPermission(string, map[uuid.UUID][]string) error {
+	return nil
+}
+
+func (s *permissionLoaderErrStub) CheckCameraStatusPermission(string, uuid.UUID, string) bool {
+	return false
+}
+
+func (s *permissionLoaderErrStub) GetCameraStatusPermissions(string) (map[uuid.UUID][]string, error) {
+	return nil, nil
+}
+
+func (s *permissionLoaderErrStub) EditCameraStatusPermission(string, map[uuid.UUID][]string) error {
+	return nil
+}
+
+func Test_currentSyncDataScope_FailClosedOnPermissionError(t *testing.T) {
+	truncateDB(t)
+
+	err := userManager.AddUser(user01)
+	if err != nil && !errors.Is(err, auth.ErrUserDuplicate) {
+		require.NoError(t, err)
+	}
+
+	prevAuthorization := authorization
+	authorization = &permissionLoaderErrStub{getPermissionsErr: errors.New("permission query failed")}
+	t.Cleanup(func() {
+		authorization = prevAuthorization
+	})
+
+	permissions, topics := currentSyncDataScope(user01.Username)
+	require.NotNil(t, permissions)
+	require.Empty(t, permissions)
+	require.NotNil(t, topics)
+	require.Empty(t, topics)
 }

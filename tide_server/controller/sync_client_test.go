@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -8,7 +9,6 @@ import (
 	"testing"
 
 	"tide/common"
-	"tide/pkg/pubsub"
 	"tide/tide_server/db"
 
 	"github.com/google/uuid"
@@ -30,15 +30,15 @@ func TestSyncClient(t *testing.T) {
 	conn3, conn4 := net.Pipe() // conn3: sync server , conn4: sync client
 	defer func() { _ = conn3.Close() }()
 
-	subscriber := pubsub.NewSubscriber(nil, conn3)
-	configPubSub.SubscribeTopic(subscriber, nil)
-	defer configPubSub.Evict(subscriber)
-	statusPubSub.SubscribeTopic(subscriber, nil)
-	defer statusPubSub.Evict(subscriber)
-	dataPubSub.SubscribeTopic(subscriber, nil)
-	defer dataPubSub.Evict(subscriber)
-	missDataPubSub.SubscribeTopic(subscriber, nil)
-	defer missDataPubSub.Evict(subscriber)
+	subscriber := hub.NewSubscriber(context.Background(), nil, jsonWriter(conn3))
+	hub.Subscribe(BrokerConfig, subscriber, nil)
+	defer hub.Unsubscribe(BrokerConfig, subscriber)
+	hub.Subscribe(BrokerStatus, subscriber, nil)
+	defer hub.Unsubscribe(BrokerStatus, subscriber)
+	hub.Subscribe(BrokerData, subscriber, nil)
+	defer hub.Unsubscribe(BrokerData, subscriber)
+	hub.Subscribe(BrokerMissingData, subscriber, nil)
+	defer hub.Unsubscribe(BrokerMissingData, subscriber)
 
 	go func() {
 		defer func() { _ = conn1.Close() }()
@@ -46,7 +46,7 @@ func TestSyncClient(t *testing.T) {
 	}()
 	go func() {
 		defer func() { _ = conn2.Close() }()
-		handleSyncClientConn(conn2, &upstreamStorage{
+		handleSyncClientConn(conn2, &upstreamSyncState{
 			config: upstreamConfig,
 		})
 	}()
@@ -157,11 +157,11 @@ func mockSyncServer(t *testing.T, conn net.Conn) {
 	// increment and full are separated to avoid receiving increment first
 	// make sure subscribe first
 	{
-		subscriber := pubsub.NewSubscriber(nil, stream1)
-		configPubSub.SubscribeTopic(subscriber, nil)
-		defer configPubSub.Evict(subscriber)
-		statusPubSub.SubscribeTopic(subscriber, nil)
-		defer statusPubSub.Evict(subscriber)
+		subscriber := hub.NewSubscriber(context.Background(), nil, jsonWriter(stream1))
+		hub.Subscribe(BrokerConfig, subscriber, nil)
+		defer hub.Unsubscribe(BrokerConfig, subscriber)
+		hub.Subscribe(BrokerStatus, subscriber, nil)
+		defer hub.Unsubscribe(BrokerStatus, subscriber)
 	}
 
 	stream2, err := session.Accept()
