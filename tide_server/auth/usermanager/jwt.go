@@ -135,8 +135,7 @@ func (j *JwtManager) AddUser(user auth.User) error {
 	// store password hash and metadata
 	_, err = tx.Exec("insert into users(username, password_hash, role, email, live_camera) values ($1,$2,$3,$4,$5)", user.Username, pwHash, user.Role, user.Email, user.LiveCamera)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" { //ERROR: duplicate key value violates unique constraint "users_username_uindex" (SQLSTATE 23505)
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" { //ERROR: duplicate key value violates unique constraint "users_username_uindex" (SQLSTATE 23505)
 			return auth.ErrUserDuplicate
 		}
 		return err

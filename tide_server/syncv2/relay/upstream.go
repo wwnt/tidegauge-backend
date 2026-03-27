@@ -306,8 +306,7 @@ func (s *UpstreamServer) handleMissDataSync(stream internalsyncv2.RelayMessageSt
 
 			ds, queryErr := s.Store.GetDataHistory(stationID, itemName, custype.UnixMs(afterMs))
 			if queryErr != nil {
-				var pgErr *pgconn.PgError
-				if errors.As(queryErr, &pgErr) && pgErr.Code == "42P01" {
+				if pgErr, ok2 := errors.AsType[*pgconn.PgError](queryErr); ok2 && pgErr.Code == "42P01" {
 					continue
 				}
 				return fmt.Errorf("failed to get data history: %w", queryErr)

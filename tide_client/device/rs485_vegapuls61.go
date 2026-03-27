@@ -47,8 +47,7 @@ func (vegaPULS61) NewDevice(c any, rawConf json.RawMessage) map[string]map[strin
 			slog.Error("Non-zero result from VEGAPULS61 device", "results", results)
 			return nil
 		}
-		var val = Float32To64(math.Float32frombits(binary.BigEndian.Uint32(results[4:])))
-		return &val
+		return new(Float32To64(math.Float32frombits(binary.BigEndian.Uint32(results[4:]))))
 	}
 	AddCronJobWithOneItem(conf.Cron, conf.ItemName, job)
 	return map[string]map[string]string{conf.DeviceName: {"water_distance": conf.ItemName}}

@@ -47,8 +47,7 @@ func (arduino) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 				slog.Error("Error reading analog value from Arduino device", "error", err)
 				return nil
 			}
-			var f = math.Round(float64(val)/1023*5*1000) / 1000
-			return &f
+			return new(math.Round(float64(val)/1023*5*1000) / 1000)
 		}
 		AddCronJobWithOneItem(item.Cron, item.ItemName, job)
 	}

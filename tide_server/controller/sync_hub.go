@@ -229,6 +229,7 @@ func (h *SyncHub) NewSubscriber(ctx context.Context, cancel context.CancelFunc, 
 					return
 				}
 				if writeMessage(message) != nil {
+					subscriber.Cancel()
 					return
 				}
 			}

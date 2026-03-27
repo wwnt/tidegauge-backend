@@ -92,8 +92,7 @@ func (k *Keycloak) ListUsers(condition int, role int) (users []auth.User, err er
 	return listUsersFromDB(k.db, condition, role)
 }
 func (k *Keycloak) getKcUserByUsername(ctx context.Context, username string) (gocloak.User, error) {
-	var exact = true
-	kcUsers, err := k.client.GetUsers(ctx, k.token.AccessToken, k.realm, gocloak.GetUsersParams{Username: &username, Exact: &exact})
+	kcUsers, err := k.client.GetUsers(ctx, k.token.AccessToken, k.realm, gocloak.GetUsersParams{Username: &username, Exact: new(true)})
 	if err != nil {
 		return gocloak.User{}, err
 	}
@@ -125,8 +124,7 @@ func (k *Keycloak) AddUser(user auth.User) error {
 	//If the Insert fails in the database, it will return directly
 	_, err = tx.Exec("insert into users(username, role, email, live_camera) values ($1,$2,$3,$4)", user.Username, user.Role, user.Email, user.LiveCamera)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" { //ERROR: duplicate key value violates unique constraint "users_username_uindex" (SQLSTATE 23505)
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" { //ERROR: duplicate key value violates unique constraint "users_username_uindex" (SQLSTATE 23505)
 			return auth.ErrUserDuplicate
 		}
 		return err
@@ -149,8 +147,7 @@ func (k *Keycloak) AddUser(user auth.User) error {
 
 	userUUID, err := k.client.CreateUser(ctx, k.token.AccessToken, k.realm, kcUser)
 	if err != nil {
-		var apiErr *gocloak.APIError
-		if !errors.As(err, &apiErr) || apiErr.Code != http.StatusConflict { // User exists with same username
+		if apiErr, ok := errors.AsType[*gocloak.APIError](err); !ok || apiErr.Code != http.StatusConflict { // User exists with same username
 			return err
 		}
 		if kcUser, err = k.getKcUserByUsername(ctx, user.Username); err != nil {
@@ -282,8 +279,7 @@ func (k *Keycloak) DelUser(username string) (err error) {
 		//Found a user
 		err = k.client.DeleteUser(ctx, k.token.AccessToken, k.realm, *kcUser.ID)
 		if err != nil {
-			var apiErr *gocloak.APIError
-			if !errors.As(err, &apiErr) || apiErr.Code != http.StatusNotFound {
+			if apiErr, ok := errors.AsType[*gocloak.APIError](err); !ok || apiErr.Code != http.StatusNotFound {
 				return err
 			}
 		}

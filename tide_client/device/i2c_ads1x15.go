@@ -62,8 +62,7 @@ func (ads1115) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap 
 					"error", err)
 				return nil
 			}
-			var f = (float64(sample.V)/float64(physic.Volt))*chM + chB
-			return &f
+			return new((float64(sample.V)/float64(physic.Volt))*chM + chB)
 		}
 		AddCronJobWithOneItem(item.Cron, item.ItemName, job)
 	}

@@ -289,8 +289,7 @@ func fillMissDataServer(conn net.Conn, permissions common.UUIDStringsMap) {
 			if msec > 0 {
 				ds, err := db.GetDataHistory(stationID, itemName, msec, 0)
 				if err != nil {
-					var pgErr *pgconn.PgError
-					if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+					if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42P01" {
 						// relation Table does not exist
 						continue
 					}
