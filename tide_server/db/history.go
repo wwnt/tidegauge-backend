@@ -19,8 +19,7 @@ func GetItemsLatest(stationId uuid.UUID, itemsLatest common.StringMsecMap) error
 		}
 		err := TideDB.QueryRow("select"+" max(timestamp) from "+itemName+" where station_id=$1", stationId).Scan(&t)
 		if err != nil {
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
+			if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "42P01" {
 				// relation Table does not exist
 				continue
 			}

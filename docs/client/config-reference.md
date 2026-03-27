@@ -104,7 +104,7 @@ These are the uart configurations. In this example it will be read in [tide_clie
 ## config
 
 According to the value of [model](#port--read_timeout--mode--model), it corresponds to the configuration of different devices.
-In this example it will be read in [device/arduino.go](../../tide_client/device/arduino.go)
+In this example it will be read in [device/transport_arduino.go](../../tide_client/device/transport_arduino.go)
 
 ## config.sdi12 | analog
 
@@ -116,7 +116,7 @@ Device model connected via sdi-12
 
 ### config.sdi12[].config
 
-Configuration that will be read by the corresponding sdi-12 device. For example: [device/ott_PLS_C.go](device/ott_PLS_C.go)
+Configuration that will be read by the corresponding sdi-12 device. For example: [device/sdi12_ott_pls_c.go](../../tide_client/device/sdi12_ott_pls_c.go)
 
 A few notes:
 

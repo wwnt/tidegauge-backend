@@ -42,11 +42,10 @@ func (pcf8583) NewDevice(conn interface{}, rawConf json.RawMessage) common.Strin
 		if err != nil {
 			return nil
 		}
-		var value = float64(cnt*2) / 10
 		if conf.ResetC {
 			_ = setCount(d, 0)
 		}
-		return &value
+		return new(float64(cnt*2) / 10)
 	}
 	AddCronJobWithOneItem(conf.Cron, conf.ItemName, job)
 	return common.StringMapMap{conf.DeviceName: map[string]string{"pcf8583_counter": conf.ItemName}}

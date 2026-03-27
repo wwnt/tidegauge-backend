@@ -32,9 +32,8 @@ func (testI2c) NewDevice(_ any, rawConf json.RawMessage) common.StringMapMap {
 				i = 0
 				return nil
 			}
-			var f = float64(i)
 			i++
-			return &f
+			return new(float64(i))
 		}
 		AddCronJobWithOneItem(item.Cron, item.ItemName, job)
 	}

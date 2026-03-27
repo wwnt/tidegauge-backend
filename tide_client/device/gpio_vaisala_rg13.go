@@ -28,15 +28,20 @@ func (rg13) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 		DeviceName string `json:"device_name"`
 		Pin        int    `json:"pin"`
 		ItemName   string `json:"item_name"`
+		ActiveLow  bool   `json:"active_low"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 	var val = 0.2
 
-	ll, err := gpio.RequestLines([]int{conf.Pin}, gpiocdev.WithPullUp, gpiocdev.WithRisingEdge,
-		gpiocdev.WithDebounce(time.Millisecond*10),
+	opts := []gpiocdev.LineReqOption{gpiocdev.WithPullUp, gpiocdev.WithRisingEdge,
+		gpiocdev.WithDebounce(time.Millisecond * 10),
 		gpiocdev.WithEventHandler(func(evt gpiocdev.LineEvent) {
 			DataReceive <- []itemData{{At: nowMs(), Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &val}}
-		}))
+		})}
+	if conf.ActiveLow {
+		opts = append(opts, gpiocdev.AsActiveLow)
+	}
+	ll, err := gpio.RequestLines([]int{conf.Pin}, opts...)
 	if err != nil {
 		if errors.Is(err, syscall.Errno(22)) {
 			slog.Error("Note that the WithPullUp option requires kernel V5.5 or later - check your kernel version.")

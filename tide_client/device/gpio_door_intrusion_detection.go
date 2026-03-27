@@ -28,22 +28,27 @@ func (doorIntrusionDetection) NewDevice(conn any, rawConf json.RawMessage) commo
 		DeviceName string `json:"device_name"`
 		Pin        int    `json:"pin"`
 		ItemName   string `json:"item_name"`
+		ActiveLow  bool   `json:"active_low"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 	var doorOpen, doorClose float64 = 1, 0
 
-	ll, err := gpio.RequestLines([]int{conf.Pin}, gpiocdev.WithPullDown, gpiocdev.WithBothEdges,
-		gpiocdev.WithDebounce(time.Millisecond*10),
+	opts := []gpiocdev.LineReqOption{gpiocdev.WithPullUp, gpiocdev.WithBothEdges,
+		gpiocdev.WithDebounce(time.Millisecond * 10),
 		gpiocdev.WithEventHandler(func(evt gpiocdev.LineEvent) {
 			at := nowMs()
-			if evt.Type == gpiocdev.LineEventRisingEdge {
+			if evt.Type == gpiocdev.LineEventFallingEdge {
 				DataReceive <- []itemData{{At: at, Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &doorOpen}}
 			}
 			DataReceive <- []itemData{{At: at, Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &doorClose}}
-		}))
+		})}
+	if conf.ActiveLow {
+		opts = append(opts, gpiocdev.AsActiveLow)
+	}
+	ll, err := gpio.RequestLines([]int{conf.Pin}, opts...)
 	if err != nil {
 		if errors.Is(err, syscall.Errno(22)) {
-			slog.Error("Note that the WithPullDown option requires kernel V5.5 or later - check your kernel version.")
+			slog.Error("Note that the WithPullUp option requires kernel V5.5 or later - check your kernel version.")
 		}
 		slog.Error("RequestLine returned error", "error", err)
 		os.Exit(1)
