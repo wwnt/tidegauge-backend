@@ -7,12 +7,14 @@ Audience: operators and developers working on station deployment or debugging lo
 Related Docs: [tide_client guide](../../tide_client/README.md), [Reverse SSH tunnel guide](reverse-ssh-tunnel.md), [SDI-12 noise mitigation](sdi-12-noise-mitigation.md)
 
 <!-- TOC -->
-* [config.json](#configjson)
+* [Client Config Reference](#client-config-reference)
+  * [config.json](#configjson)
   * [listen](#listen)
   * [server](#server)
   * [identifier](#identifier)
   * [db](#db)
     * [db.dsn](#dbdsn)
+    * [db.hold_days](#dbhold_days)
   * [cameras](#cameras)
     * [cameras.ftp](#camerasftp)
       * [cameras.ftp.path](#camerasftppath)
@@ -29,6 +31,8 @@ Related Docs: [tide_client guide](../../tide_client/README.md), [Reverse SSH tun
     * [config.sdi12[].model](#configsdi12model)
     * [config.sdi12[].config](#configsdi12config)
     * [config.analog[]](#configanalog)
+* [devices_uart_rs485_modbus.json](#devices_uart_rs485_modbusjson)
+  * [config[]](#config-1)
 <!-- TOC -->
 
 ## config.json
@@ -54,6 +58,11 @@ Sqlite Database configuration.
 ### db.dsn
 
 This is also known as a DSN (Data Source Name) string. [Check the sqlite driver documentation](https://pkg.go.dev/github.com/mattn/go-sqlite3).
+
+### db.hold_days
+
+The number of days to keep time-series data in the local SQLite database.
+The sample configuration defaults to `90`, which is about 3 months.
 
 ## cameras
 
@@ -92,6 +101,10 @@ List of configuration files for different connection methods
 ### devices.uart | tcp | gpio
 
 Each connection method can have multiple config files.
+
+For direct USB/serial `Modbus RTU` deployments, prefer `devices_uart_rs485_modbus.json`.
+Use `devices_tcp_rs485_modbus.json` only when the RS485 bus is behind a serial-to-TCP gateway.
+Do not load both files for the same physical bus at the same time.
 
 # devices_uart_arduino.json
 
@@ -132,3 +145,18 @@ A few notes:
 ### config.analog[]
 
 Config that will be read by analog device.
+
+# devices_uart_rs485_modbus.json
+
+This sample config file exists under [`devices.uart`](#devicesuart--tcp--gpio), so it is connected via a local UART
+RS485 adapter.
+
+It reuses the `uart-rs485` transport and can host multiple Modbus RTU devices on the same bus, for example
+`VEGAPULS61` and `ANALOG-VOLTAGE-MODBUS`.
+
+## config[]
+
+Each item in `config[]` is dispatched by [`tide_client/device/transport_uart_rs485.go`](../../tide_client/device/transport_uart_rs485.go).
+
+`ANALOG-VOLTAGE-MODBUS` reads one input register with Modbus function `0x04` from register `0`, decodes the `uint16`
+payload, and publishes the result as `rain_intensity`.

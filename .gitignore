@@ -20,7 +20,7 @@
 
 tide_client/tide_client
 tide_client/data.db
-tide_client/config.json
+tide_client/configs_backup/wwnt/config.json
 tide_client/configs/
 tide_client/configs_backup/
 

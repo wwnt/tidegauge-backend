@@ -34,7 +34,7 @@ func (rg13) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 	var val = 0.2
 
 	opts := []gpiocdev.LineReqOption{gpiocdev.WithPullUp, gpiocdev.WithRisingEdge,
-		gpiocdev.WithDebounce(time.Millisecond * 10),
+		gpiocdev.WithDebounce(time.Millisecond * 50),
 		gpiocdev.WithEventHandler(func(evt gpiocdev.LineEvent) {
 			DataReceive <- []itemData{{At: nowMs(), Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &val}}
 		})}

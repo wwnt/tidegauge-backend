@@ -181,6 +181,9 @@ Install [Serial Debug Assistant](https://www.microsoft.com/store/productId/9NBLG
 2. Setting sensor baud-rate to 9600, data-bits to 7, parity to "E", stop-bits to 1.
 3. Setting sensor address same with the address in config.
 
+For local Modbus RTU devices connected through a USB-RS485 adapter, use `devices_uart_rs485_modbus.json`.
+Do not enable it together with `devices_tcp_rs485_modbus.json` for the same physical RS485 bus.
+
 ### 8.1.1. HMP155
 
 ```

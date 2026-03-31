@@ -9,11 +9,11 @@
 	"devices": {
 		"uart": [
 			"devices_uart_arduino.json",
-			"devices_uart_rs485.json"
+			"devices_uart_rs485.json",
+			"devices_uart_rs485_modbus.json"
 		],
 		"tcp": [
-			"devices_tcp_arduino.json",
-			"devices_tcp_rs485_modbus.json"
+			"devices_tcp_arduino.json"
 		],
 		"gpio": [
 			"devices_gpio.json"
@@ -21,7 +21,7 @@
 	},
 	"db": {
 		"dsn": "data.db",
-		"hold_days": 10
+		"hold_days": 90
 	},
 	"gnss": {
 		"ftp": {

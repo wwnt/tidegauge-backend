@@ -74,14 +74,16 @@ func (c *ConnUtil) CustomCommand(input []byte) (received []byte, err error) {
 	var n int
 	for {
 		n, err = c.Read(buf)
-		if err != nil {
-			break
-		}
 		if n > 0 {
 			received = append(received, buf[:n]...)
 		}
+		if err != nil {
+			if errors.Is(err, ErrTimeout) && len(received) > 0 {
+				return received, nil
+			}
+			return received, err
+		}
 	}
-	return received, err
 }
 
 func (c *ConnUtil) UnlockCheckNotTimeout(err error) {
@@ -91,7 +93,7 @@ func (c *ConnUtil) UnlockCheckNotTimeout(err error) {
 	c.Unlock()
 }
 
-const arduinoCommandEnd = '\xFF'
+const arduinoCommandEnd byte = 0xFF
 
 func (c *ConnUtil) SDI12ConcurrentMeasurement(addr string, extraWakeTime byte, output string, wait time.Duration) error {
 	var input = []byte(addr + "C!")
