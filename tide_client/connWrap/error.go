@@ -31,10 +31,10 @@ func (e *Error) Error() string {
 		ret = e.Err.Error()
 	}
 	if e.Send != nil {
-		ret += fmt.Sprintf(", Send: [% X]%s", e.Send, pkg.Printable(e.Send))
+		ret += fmt.Sprintf(", Send: %s", pkg.Printable(e.Send))
 	}
 	if e.Received != nil {
-		ret += fmt.Sprintf(", Rcvd: [% X]%s", e.Received, pkg.Printable(e.Received))
+		ret += fmt.Sprintf(", Rcvd: %s", pkg.Printable(e.Received))
 	}
 	return ret
 }

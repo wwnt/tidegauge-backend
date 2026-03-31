@@ -52,7 +52,7 @@ func scheduleRemoveOutdatedData() {
 				os.Exit(1)
 			}
 		}
-		db.CleanDBData(time.Now().Add(-global.Config.Db.HoldDays * 24 * time.Hour).Unix())
+		db.CleanDBData(time.Now().Add(-global.Config.Db.HoldDays * 24 * time.Hour).UnixMilli())
 	}
 	removeOutdatedDataJob()
 	if _, err := global.CronJob.AddFunc("@daily", removeOutdatedDataJob); err != nil {

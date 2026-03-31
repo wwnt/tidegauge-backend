@@ -33,16 +33,16 @@ func (pwd50) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	var job = func() *float64 {
 		line, err = conn.ReadLine([]byte("\r\x05PW " + conf.Addr + " 0\r"))
 		if err != nil {
-			slog.Error("Failed to read line from PWD50 device", "error", err, "received", pkg.Printable([]byte(line)), "received_hex", line)
+			slog.Error("Failed to read line from PWD50 device", "error", err, "received", pkg.Printable([]byte(line)))
 			return nil
 		}
 		if len(line) != 25 {
-			slog.Error("Invalid line length received from PWD50 device", "received", pkg.Printable([]byte(line)), "received_hex", line, "length", len(line))
+			slog.Error("Invalid line length received from PWD50 device", "received", pkg.Printable([]byte(line)), "length", len(line))
 			return nil
 		}
 		status := line[8]
 		if status != '0' {
-			slog.Error("PWD50 device returned non-zero status", "status", status)
+			slog.Error("PWD50 device returned non-zero status", "status", string(status))
 			recv, err := conn.CustomCommand([]byte("\r\x05PW " + conf.Addr + " 3\r"))
 			if err != nil {
 				slog.Error("Failed to send custom command to PWD50 device", "error", err, "received", pkg.Printable(recv))
@@ -53,16 +53,16 @@ func (pwd50) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		}
 		val1 := strings.TrimSpace(line[9:16])
 		if len(val1) == 0 {
-			slog.Error("Empty value received from PWD50 device", "received", pkg.Printable([]byte(line)), "received_hex", line)
+			slog.Error("Empty value received from PWD50 device", "received", pkg.Printable([]byte(line)))
 			return nil
 		}
 		if val1[0] == '/' {
-			slog.Error("Invalid value format received from PWD50 device", "received", pkg.Printable([]byte(line)), "received_hex", line)
+			slog.Error("Invalid value format received from PWD50 device", "received", pkg.Printable([]byte(line)))
 			return nil
 		}
 		f, err := strconv.ParseFloat(val1, 64)
 		if err != nil {
-			slog.Error("Failed to parse float value from PWD50 device", "error", err, "received", pkg.Printable([]byte(line)), "received_hex", line)
+			slog.Error("Failed to parse float value from PWD50 device", "error", err, "received", pkg.Printable([]byte(line)))
 			return nil
 		}
 		return &f

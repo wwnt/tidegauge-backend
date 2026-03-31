@@ -18,12 +18,12 @@ func Must2(_ any, err error) {
 	}
 }
 
-func Printable(str []byte) []byte {
-	return bytes.Map(func(r rune) rune {
+func Printable(str []byte) string {
+	return string(bytes.Map(func(r rune) rune {
 		if unicode.IsPrint(r) {
 			return r
 		} else {
 			return '^'
 		}
-	}, str)
+	}, str))
 }
