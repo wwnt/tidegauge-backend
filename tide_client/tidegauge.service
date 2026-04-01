@@ -1,10 +1,11 @@
 [Unit]
 Description=Tide Gauge Service
+# Keep collecting locally during offline boots; sync can catch up later.
 After=network.target
 
 [Service]
 User=pi
-WorkingDirectory=/home/pi/tide/
+WorkingDirectory=/home/pi/tide
 
 ExecStart=/home/pi/tide/tide_client
 

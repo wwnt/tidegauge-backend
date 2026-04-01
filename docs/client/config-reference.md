@@ -9,6 +9,7 @@ Related Docs: [tide_client guide](../../tide_client/README.md), [Reverse SSH tun
 <!-- TOC -->
 * [Client Config Reference](#client-config-reference)
   * [config.json](#configjson)
+  * [log_level](#log_level)
   * [listen](#listen)
   * [server](#server)
   * [identifier](#identifier)
@@ -38,6 +39,19 @@ Related Docs: [tide_client guide](../../tide_client/README.md), [Reverse SSH tun
 ## config.json
 
 You can view the sample file `config.template.json`
+
+## log_level
+
+Controls the client log verbosity.
+
+Supported values:
+
+- `debug`
+- `info`
+- `warn`
+- `error`
+
+If omitted, the process falls back to the CLI default.
 
 ## listen
 

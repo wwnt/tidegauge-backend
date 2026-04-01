@@ -53,7 +53,7 @@ func (dRD11A) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
 		slog.Error("RequestLine returned error", "error", err)
 		os.Exit(1)
 	}
-	slog.Debug("watch on gpio pin", "pin", conf.Pin)
+	slog.Info("watch on gpio pin", "pin", conf.Pin)
 	project.RegisterReleaseFunc(func() { _ = ll.Close() })
 	return common.StringMapMap{conf.DeviceName: map[string]string{"precipitation_detection": conf.ItemName}}
 }
