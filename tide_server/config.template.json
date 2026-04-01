@@ -6,7 +6,7 @@
             "storage": "E:/tide/cameras/",
             "latest_snapshot_count": 9
         },
-        "data_delay_sec": 60
+        "data_delay_sec": 0
     },
     "smtp": {
         "host": "smtp.mail.com",

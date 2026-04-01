@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"tide/tide_client/connWrap"
 	"time"
@@ -38,6 +39,7 @@ type Mode struct {
 type Uart struct {
 	mode        serial.Mode
 	portName    string
+	connMu      sync.RWMutex
 	conn        serial.Port
 	readTimeout time.Duration
 	inReconnect atomic.Bool
@@ -65,8 +67,11 @@ func (c *Uart) reopenUntilSuccess() {
 		return
 	}
 	defer c.inReconnect.Store(false)
-	if c.conn != nil {
-		_ = c.conn.Close()
+	if conn := c.loadConn(); conn != nil {
+		// Closing the old port is expected to interrupt any blocked Read/Write.
+		// Keep the closed port published until a replacement is ready so concurrent
+		// callers fail with the underlying I/O error instead of racing with nil.
+		_ = conn.Close()
 	}
 	var err error
 	for {
@@ -82,20 +87,42 @@ func (c *Uart) reopenUntilSuccess() {
 
 func (c *Uart) open() error {
 	port, err := serial.Open(c.portName, &c.mode)
-	if err == nil {
-		if err = port.SetReadTimeout(c.readTimeout); err == nil {
-			c.conn = port
-		}
+	if err != nil {
+		return err
 	}
-	return err
+	if err = port.SetReadTimeout(c.readTimeout); err != nil {
+		_ = port.Close()
+		return err
+	}
+	c.storeConn(port)
+	return nil
+}
+
+func (c *Uart) SerialBaudRate() int {
+	return c.mode.BaudRate
+}
+
+func (c *Uart) loadConn() serial.Port {
+	// Readers operate on a stable snapshot so reconnect can swap the port
+	// reference without exposing a transient nil to concurrent callers.
+	c.connMu.RLock()
+	defer c.connMu.RUnlock()
+	return c.conn
+}
+
+func (c *Uart) storeConn(conn serial.Port) {
+	c.connMu.Lock()
+	defer c.connMu.Unlock()
+	c.conn = conn
 }
 
 func (c *Uart) Read(b []byte) (n int, err error) {
-	if c.conn == nil {
+	conn := c.loadConn()
+	if conn == nil {
 		return 0, os.ErrInvalid
 	}
 	defer func() { c.handleErr(err) }()
-	n, err = c.conn.Read(b)
+	n, err = conn.Read(b)
 	if n == 0 && err == nil {
 		return 0, connWrap.ErrTimeout
 	}
@@ -103,24 +130,28 @@ func (c *Uart) Read(b []byte) (n int, err error) {
 }
 
 func (c *Uart) Write(b []byte) (n int, err error) {
-	if c.conn == nil {
+	conn := c.loadConn()
+	if conn == nil {
 		return 0, os.ErrInvalid
 	}
 	defer func() { c.handleErr(err) }()
-	return c.conn.Write(b)
+	return conn.Write(b)
 }
 
 func (c *Uart) ResetInputBuffer() (err error) {
-	if c.conn == nil {
+	conn := c.loadConn()
+	if conn == nil {
 		return os.ErrInvalid
 	}
 	defer func() { c.handleErr(err) }()
-	return c.conn.ResetInputBuffer()
+	return conn.ResetInputBuffer()
 }
 
 func (c *Uart) handleErr(err error) {
 	if err == nil || errors.Is(err, connWrap.ErrTimeout) {
 		return
 	}
+	// Any non-timeout I/O error means the port is no longer trustworthy.
+	// Reopen in the background; the current caller will observe the original error.
 	go c.reopenUntilSuccess()
 }

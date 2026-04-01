@@ -61,7 +61,7 @@ func Init() {
 			if !runSyncV2ClientOnce(dataBroker) {
 				client(dataBroker)
 			}
-			time.Sleep(3 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 	}()
 }

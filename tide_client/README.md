@@ -121,6 +121,7 @@ Add `sync_v2` in `config.json` to use the new interface:
 
 ```json
 {
+  "log_level": "info",
   "sync_v2": {
     "enabled": true,
     "addr": "http://server.example.com:7100"

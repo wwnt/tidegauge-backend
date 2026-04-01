@@ -15,6 +15,10 @@ type ConnCommon interface {
 	ResetInputBuffer() (err error)
 }
 
+type SerialConfigProvider interface {
+	SerialBaudRate() int
+}
+
 type ConnUtil struct {
 	ConnCommon
 	sync.Mutex
@@ -25,6 +29,13 @@ func NewConnUtil(conn ConnCommon) *ConnUtil {
 	return &ConnUtil{
 		ConnCommon: conn,
 	}
+}
+
+func (c *ConnUtil) BaudRate() int {
+	if provider, ok := c.ConnCommon.(SerialConfigProvider); ok {
+		return provider.SerialBaudRate()
+	}
+	return 0
 }
 
 func (c *ConnUtil) writeCommand(input []byte) (n int, err error) {
@@ -69,7 +80,7 @@ func (c *ConnUtil) CustomCommand(input []byte) (received []byte, err error) {
 	if _, err = c.writeCommand(input); err != nil {
 		return nil, err
 	}
-	time.Sleep(2 * time.Second)
+	time.Sleep(time.Second)
 	var buf = make([]byte, 100)
 	var n int
 	for {
