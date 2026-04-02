@@ -22,8 +22,7 @@ func init() {
 
 type dRD11A struct{}
 
-func (dRD11A) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
-	gpio := conn.(*gpiocdev.Chip)
+func (dRD11A) NewGPIODevice(gpio *gpiocdev.Chip, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		DeviceName string `json:"device_name"`
 		Pin        int    `json:"pin"`

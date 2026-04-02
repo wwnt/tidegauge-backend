@@ -40,7 +40,7 @@ func newGpioConn(rawConf json.RawMessage) common.StringMapMap {
 
 	var info = make(common.StringMapMap)
 	for _, deviceConf := range conf.Config {
-		subInfo := device.GetDevice(deviceConf.Model).(device.Device).NewDevice(rpiGPIO, deviceConf.Config)
+		subInfo := device.MustGPIODevice(deviceConf.Model).NewGPIODevice(rpiGPIO, deviceConf.Config)
 		device.MergeInfo(info, subInfo)
 	}
 	return info

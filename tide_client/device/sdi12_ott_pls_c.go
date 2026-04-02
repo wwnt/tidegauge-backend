@@ -6,6 +6,7 @@ import (
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
+	"tide/tide_client/protocol/sdi12"
 	"time"
 )
 
@@ -37,10 +38,18 @@ type plsC struct {
 	maxTDS   float64
 }
 
+var (
+	_ BusDevice   = (*plsC)(nil)
+	_ SDI12Device = (*plsC)(nil)
+)
+
 var PLSCItems = map[string]int{"water_level": 0, "water_temperature": 1, "water_conductivity": 2, "water_salinity": 3, "water_total_dissolved_solids": 4}
 
-func (d *plsC) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]string {
-	conn := c.(*connWrap.ConnUtil)
+func (d *plsC) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
+	return d.NewSDI12Device(sdi12.NewSession(bus, sdi12.ModeNative), rawConf)
+}
+
+func (d *plsC) NewSDI12Device(session *sdi12.Session, rawConf json.RawMessage) map[string]map[string]string {
 	var conf struct {
 		Addr          string            `json:"addr"`
 		ExtraWakeTime byte              `json:"extra_wake_time"`
@@ -56,12 +65,12 @@ func (d *plsC) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]s
 		tmpData = make(map[string]*float64)
 	)
 	var job = func() map[string]*float64 {
-		err = conn.SDI12ConcurrentMeasurement(conf.Addr, conf.ExtraWakeTime, output, 5*time.Second)
+		err = session.ConcurrentMeasurement(conf.Addr, conf.ExtraWakeTime, output, 5*time.Second)
 		if err != nil {
 			slog.Error("Failed to perform SDI-12 concurrent measurement", "device", "PLS-C", "addr", conf.Addr, "error", err)
 			return nil
 		}
-		values, err := conn.GetSDI12Data(conf.Addr, conf.ExtraWakeTime, 5)
+		values, err := session.GetData(conf.Addr, conf.ExtraWakeTime, 5)
 		if err != nil {
 			slog.Error("Failed to get SDI-12 data", "device", "PLS-C", "addr", conf.Addr, "error", err)
 			return nil

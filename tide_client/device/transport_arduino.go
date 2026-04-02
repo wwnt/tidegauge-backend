@@ -7,6 +7,8 @@ import (
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
+	protocolarduino "tide/tide_client/protocol/arduino"
+	"tide/tide_client/protocol/sdi12"
 )
 
 func init() {
@@ -15,9 +17,9 @@ func init() {
 
 type arduino struct{}
 
-func (arduino) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
-	conn := c.(*connWrap.ConnUtil)
-	conn.Typ = "arduino"
+func (arduino) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
+	arduinoSession := protocolarduino.NewSession(bus)
+	sdi12Session := sdi12.NewSession(bus, sdi12.ModeArduino)
 	var conf struct {
 		Sdi12 []struct {
 			Model  string          `json:"model"`
@@ -25,7 +27,6 @@ func (arduino) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		}
 		Analog []struct {
 			DeviceName string `json:"device_name"`
-			Model      string `json:"model"`
 			Pin        byte   `json:"pin"`
 			Cron       string `json:"cron"`
 			ItemName   string `json:"item_name"`
@@ -35,14 +36,14 @@ func (arduino) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 	var info = make(map[string]map[string]string)
 	for _, subDevice := range conf.Sdi12 {
-		subInfo := GetDevice(subDevice.Model).(Device).NewDevice(conn, subDevice.Config)
+		subInfo := MustSDI12Device(subDevice.Model).NewSDI12Device(sdi12Session, subDevice.Config)
 		MergeInfo(info, subInfo)
 	}
 	for _, item := range conf.Analog {
 		MergeInfo(info, common.StringMapMap{item.DeviceName: map[string]string{item.ItemType: item.ItemName}})
 
 		var job = func() *float64 {
-			val, err := conn.AnalogRead(item.Pin)
+			val, err := arduinoSession.AnalogRead(item.Pin)
 			if err != nil {
 				slog.Error("Error reading analog value from Arduino device", "error", err)
 				return nil

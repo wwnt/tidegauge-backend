@@ -17,7 +17,7 @@ func init() {
 
 type unsupportedGPIODevice string
 
-func (d unsupportedGPIODevice) NewDevice(_ any, _ json.RawMessage) common.StringMapMap {
+func (d unsupportedGPIODevice) NewGPIODevice(_ any, _ json.RawMessage) common.StringMapMap {
 	slog.Error("GPIO device model is only supported on linux", "model", string(d))
 	os.Exit(1)
 	return nil

@@ -8,9 +8,7 @@ import (
 	"strconv"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
-	"time"
-
-	"github.com/wwnt/modbus"
+	"tide/tide_client/protocol/modbusrtu"
 )
 
 func init() {
@@ -19,8 +17,7 @@ func init() {
 
 type vegaPULS61 struct{}
 
-func (vegaPULS61) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]string {
-	conn := c.(*connWrap.ConnUtil)
+func (vegaPULS61) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) map[string]map[string]string {
 	var conf struct {
 		DeviceName string `json:"device_name"`
 		Addr       byte   `json:"addr"`
@@ -29,19 +26,13 @@ func (vegaPULS61) NewDevice(c any, rawConf json.RawMessage) map[string]map[strin
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 
-	h := modbus.NewRTUClientHandler(conn)
-	h.SlaveId = conf.Addr
-	h.BaudRate = conn.BaudRate()
 	var (
 		err     error
-		client  = modbus.NewClient(h)
+		session = modbusrtu.NewSession(bus, conf.Addr)
 		results []byte
 	)
 	var job = func() *float64 {
-		conn.Lock()
-		defer conn.Unlock() // must be locked to prevent simultaneous operations
-		time.Sleep(500 * time.Millisecond)
-		results, err = client.ReadInputRegisters(2000, 4)
+		results, err = session.ReadInputRegisters(2000, 4)
 		if err != nil {
 			slog.Error("Error reading input registers from VEGAPULS61 device", "error", err)
 			return nil

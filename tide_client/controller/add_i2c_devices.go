@@ -36,7 +36,7 @@ func newI2cConn(rawConf json.RawMessage) common.StringMapMap {
 
 	var info = make(common.StringMapMap)
 	for _, deviceConf := range conf.Config {
-		subInfo := device.GetDevice(deviceConf.Model).(device.Device).NewDevice(bus, deviceConf.Config)
+		subInfo := device.MustI2CDevice(deviceConf.Model).NewI2CDevice(bus, deviceConf.Config)
 		device.MergeInfo(info, subInfo)
 	}
 	return info

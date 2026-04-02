@@ -13,9 +13,7 @@ func init() {
 
 type uartRs232 struct{}
 
-func (uartRs232) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
-	conn := c.(*connWrap.ConnUtil)
-	conn.Typ = "uart-rs232"
+func (uartRs232) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		Model  string          `json:"model"`
 		Config json.RawMessage `json:"config"`
@@ -23,7 +21,7 @@ func (uartRs232) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 	var info = make(common.StringMapMap)
 
-	subInfo := GetDevice(conf.Model).(Device).NewDevice(conn, conf.Config)
+	subInfo := MustBusDevice(conf.Model).NewBusDevice(bus, conf.Config)
 	MergeInfo(info, subInfo)
 
 	return info

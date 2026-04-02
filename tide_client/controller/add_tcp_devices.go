@@ -26,15 +26,15 @@ func newTcpConn(rawConf json.RawMessage) common.StringMapMap {
 	var conf tcpDeviceConfig
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 
-	connCommon, err := tcp.NewTcp(conf.Addr, conf.ReadTimeout)
+	connCommon, err := tcp.StartTcp(conf.Addr, conf.ReadTimeout)
 	if err != nil {
 		slog.Error("Connecting", "tcp", conf.Addr, "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Connected", "tcp", conf.Addr)
+	bus := connWrap.NewBus(connCommon)
+	slog.Info("Connection manager started", "tcp", conf.Addr)
 
-	connU := connWrap.NewConnUtil(connCommon)
-	subInfo := device.GetDevice(conf.Model).(device.Device).NewDevice(connU, conf.Config)
+	subInfo := device.MustBusDevice(conf.Model).NewBusDevice(bus, conf.Config)
 	var info = make(common.StringMapMap)
 	device.MergeInfo(info, subInfo)
 	return info
