@@ -9,9 +9,7 @@ import (
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
-	"time"
-
-	"github.com/wwnt/modbus"
+	"tide/tide_client/protocol/modbusrtu"
 )
 
 func init() {
@@ -20,8 +18,7 @@ func init() {
 
 type analogVoltageModbus struct{}
 
-func (analogVoltageModbus) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
-	conn := c.(*connWrap.ConnUtil)
+func (analogVoltageModbus) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		DeviceName string `json:"device_name"`
 		Addr       byte   `json:"addr"`
@@ -30,16 +27,9 @@ func (analogVoltageModbus) NewDevice(c any, rawConf json.RawMessage) common.Stri
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 
-	h := modbus.NewRTUClientHandler(conn)
-	h.SlaveId = conf.Addr
-	h.BaudRate = conn.BaudRate()
-	client := modbus.NewClient(h)
+	session := modbusrtu.NewSession(bus, conf.Addr)
 	job := func() *float64 {
-		conn.Lock()
-		defer conn.Unlock() // prevent overlapping Modbus requests on the shared bus
-
-		time.Sleep(500 * time.Millisecond)
-		results, readErr := client.ReadInputRegisters(0, 1)
+		results, readErr := session.ReadInputRegisters(0, 1)
 		if readErr != nil {
 			slog.Error("Error reading input registers from analog voltage Modbus device", "error", readErr, "addr", conf.Addr)
 			return nil

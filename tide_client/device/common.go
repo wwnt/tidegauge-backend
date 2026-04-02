@@ -9,8 +9,12 @@ import (
 	"tide/common"
 	"tide/pkg"
 	"tide/pkg/custype"
+	"tide/tide_client/connWrap"
 	"tide/tide_client/global"
+	"tide/tide_client/protocol/sdi12"
 	"time"
+
+	"periph.io/x/conn/v3/i2c"
 )
 
 var (
@@ -32,8 +36,58 @@ func RegisterDevice(name string, d any) {
 	devices[name] = d
 }
 
-func GetDevice(m string) any {
-	return devices[m]
+type BusDevice interface {
+	NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap
+}
+
+type I2CDevice interface {
+	NewI2CDevice(bus i2c.Bus, rawConf json.RawMessage) common.StringMapMap
+}
+
+type SDI12Device interface {
+	NewSDI12Device(session *sdi12.Session, rawConf json.RawMessage) common.StringMapMap
+}
+
+func MustBusDevice(name string) BusDevice {
+	device, ok := getRegisteredDevice(name).(BusDevice)
+	if !ok {
+		slog.Error("Device model does not support requested capability", "model", name, "capability", "shared bus")
+		os.Exit(1)
+		return nil
+	}
+	return device
+}
+
+func MustI2CDevice(name string) I2CDevice {
+	device, ok := getRegisteredDevice(name).(I2CDevice)
+	if !ok {
+		slog.Error("Device model does not support requested capability", "model", name, "capability", "i2c")
+		os.Exit(1)
+		return nil
+	}
+	return device
+}
+
+func MustSDI12Device(name string) SDI12Device {
+	device, ok := getRegisteredDevice(name).(SDI12Device)
+	if !ok {
+		slog.Error("Device model does not support requested capability", "model", name, "capability", "sdi-12")
+		os.Exit(1)
+		return nil
+	}
+	return device
+}
+
+func getRegisteredDevice(name string) any {
+	devicesMu.RLock()
+	defer devicesMu.RUnlock()
+
+	device, ok := devices[name]
+	if !ok {
+		slog.Error("Unknown device model", "model", name)
+		os.Exit(1)
+	}
+	return device
 }
 
 type itemData struct {
@@ -42,10 +96,6 @@ type itemData struct {
 	Typ      common.MsgType
 	ItemName string
 	Value    *float64
-}
-
-type Device interface {
-	NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap
 }
 
 func nowMs() custype.UnixMs {

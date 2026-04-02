@@ -22,8 +22,7 @@ func init() {
 
 type doorIntrusionDetection struct{}
 
-func (doorIntrusionDetection) NewDevice(conn any, rawConf json.RawMessage) common.StringMapMap {
-	gpio := conn.(*gpiocdev.Chip)
+func (doorIntrusionDetection) NewGPIODevice(gpio *gpiocdev.Chip, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		DeviceName string `json:"device_name"`
 		Pin        int    `json:"pin"`

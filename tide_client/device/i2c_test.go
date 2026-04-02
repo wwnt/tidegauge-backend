@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"tide/common"
 	"tide/pkg"
+
+	"periph.io/x/conn/v3/i2c"
 )
 
 func init() {
@@ -12,7 +14,7 @@ func init() {
 
 type testI2c struct{}
 
-func (testI2c) NewDevice(_ any, rawConf json.RawMessage) common.StringMapMap {
+func (testI2c) NewI2CDevice(_ i2c.Bus, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		Items []struct {
 			DeviceName string `json:"device_name"`

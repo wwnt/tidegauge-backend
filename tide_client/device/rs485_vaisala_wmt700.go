@@ -8,6 +8,7 @@ import (
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
+	"tide/tide_client/protocol/textline"
 )
 
 func init() {
@@ -18,8 +19,7 @@ type wmt700 struct{}
 
 var wmt700Items = map[string]int{"wind_speed": 0, "wind_direction": 1}
 
-func (wmt700) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
-	conn := c.(*connWrap.ConnUtil)
+func (wmt700) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		DeviceName string            `json:"device_name"`
 		Addr       string            `json:"addr"`
@@ -27,6 +27,7 @@ func (wmt700) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		Items      map[string]string `json:"items"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
+	session := textline.NewSession(bus)
 
 	var (
 		err     error
@@ -36,7 +37,7 @@ func (wmt700) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 	)
 
 	var job = func() map[string]*float64 {
-		line, err = conn.ReadLine(input)
+		line, err = session.ReadLine(input)
 		if err != nil {
 			slog.Error("IO error while reading from WMT700 device", "error", err, "received", []byte(line))
 			return nil

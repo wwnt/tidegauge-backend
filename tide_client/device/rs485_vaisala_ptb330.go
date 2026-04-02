@@ -8,6 +8,7 @@ import (
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
+	"tide/tide_client/protocol/textline"
 )
 
 func init() {
@@ -18,8 +19,7 @@ type ptb330 struct{}
 
 var ptb330Items = map[string]int{"air_pressure": 0}
 
-func (ptb330) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
-	conn := c.(*connWrap.ConnUtil)
+func (ptb330) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		Addr       string            `json:"addr"`
 		DeviceName string            `json:"device_name"`
@@ -27,6 +27,7 @@ func (ptb330) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		Items      map[string]string `json:"items"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
+	session := textline.NewSession(bus)
 
 	var (
 		err     error
@@ -35,7 +36,7 @@ func (ptb330) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		tmpData = make(map[string]*float64)
 	)
 	job := func() map[string]*float64 {
-		line, err = conn.ReadLine(input)
+		line, err = session.ReadLine(input)
 		if err != nil {
 			slog.Error("IO error while reading from PTB330 device", "error", err, "received", []byte(line))
 			return nil

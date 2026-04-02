@@ -27,15 +27,16 @@ func newUartConn(rawConf json.RawMessage) common.StringMapMap {
 	var conf uartDeviceConfig
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 
-	connCommon, err := uart.NewUart(conf.Port, conf.ReadTimeout, conf.Mode)
+	connCommon, err := uart.StartUart(conf.Port, conf.ReadTimeout, conf.Mode)
 	if err != nil {
 		slog.Error("Connecting", "port", conf.Port, "error", err)
 		os.Exit(1)
 	}
-	slog.Info("Connected", "port", conf.Port)
 
-	connU := connWrap.NewConnUtil(connCommon)
-	subInfo := device.GetDevice(conf.Model).(device.Device).NewDevice(connU, conf.Config)
+	bus := connWrap.NewBus(connCommon)
+	slog.Info("Connection manager started", "port", conf.Port)
+
+	subInfo := device.MustBusDevice(conf.Model).NewBusDevice(bus, conf.Config)
 	var info = make(common.StringMapMap)
 	device.MergeInfo(info, subInfo)
 	return info

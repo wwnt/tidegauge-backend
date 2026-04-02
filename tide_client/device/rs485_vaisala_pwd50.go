@@ -8,6 +8,7 @@ import (
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
+	"tide/tide_client/protocol/textline"
 )
 
 func init() {
@@ -16,8 +17,7 @@ func init() {
 
 type pwd50 struct{}
 
-func (pwd50) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
-	conn := c.(*connWrap.ConnUtil)
+func (pwd50) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		ItemName   string `json:"item_name"`
 		DeviceName string `json:"device_name"`
@@ -25,13 +25,14 @@ func (pwd50) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		Cron       string `json:"cron"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
+	session := textline.NewSession(bus)
 
 	var (
 		err  error
 		line string
 	)
 	var job = func() *float64 {
-		line, err = conn.ReadLine([]byte("\r\x05PW " + conf.Addr + " 0\r"))
+		line, err = session.ReadLine([]byte("\r\x05PW " + conf.Addr + " 0\r"))
 		if err != nil {
 			slog.Error("Failed to read line from PWD50 device", "error", err, "received", pkg.Printable([]byte(line)))
 			return nil
@@ -43,7 +44,7 @@ func (pwd50) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		status := line[8]
 		if status != '0' {
 			slog.Error("PWD50 device returned non-zero status", "status", string(status))
-			recv, err := conn.CustomCommand([]byte("\r\x05PW " + conf.Addr + " 3\r"))
+			recv, err := session.CustomCommand([]byte("\r\x05PW " + conf.Addr + " 3\r"))
 			if err != nil {
 				slog.Error("Failed to send custom command to PWD50 device", "error", err, "received", pkg.Printable(recv))
 			} else {

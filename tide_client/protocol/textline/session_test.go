@@ -1,13 +1,16 @@
-package connWrap
+package textline
 
 import (
 	"io"
 	"testing"
+
+	"tide/tide_client/connWrap"
 )
 
 type stubConnCommon struct {
 	readResults []stubReadResult
 	readIndex   int
+	readOffset  int
 }
 
 type stubReadResult struct {
@@ -16,13 +19,25 @@ type stubReadResult struct {
 }
 
 func (s *stubConnCommon) Read(p []byte) (int, error) {
-	if s.readIndex >= len(s.readResults) {
-		return 0, io.EOF
+	for s.readIndex < len(s.readResults) {
+		res := s.readResults[s.readIndex]
+		if s.readOffset < len(res.data) {
+			n := copy(p, res.data[s.readOffset:])
+			s.readOffset += n
+			if s.readOffset == len(res.data) {
+				s.readIndex++
+				s.readOffset = 0
+				return n, res.err
+			}
+			return n, nil
+		}
+		s.readIndex++
+		s.readOffset = 0
+		if res.err != nil {
+			return 0, res.err
+		}
 	}
-	res := s.readResults[s.readIndex]
-	s.readIndex++
-	copy(p, res.data)
-	return len(res.data), res.err
+	return 0, io.EOF
 }
 
 func (s *stubConnCommon) Write(p []byte) (int, error) {
@@ -36,14 +51,15 @@ func (s *stubConnCommon) ResetInputBuffer() error {
 func TestCustomCommandTreatsTimeoutAfterDataAsSuccess(t *testing.T) {
 	t.Parallel()
 
-	conn := NewConnUtil(&stubConnCommon{
+	session := NewSession(connWrap.NewBusWithQuietTime(&stubConnCommon{
 		readResults: []stubReadResult{
 			{data: []byte("STATUS")},
-			{err: ErrTimeout},
+			{err: connWrap.ErrTimeout},
 		},
-	})
+	}, 0))
+	session.customCommandWait = 0
 
-	received, err := conn.CustomCommand([]byte("cmd"))
+	received, err := session.CustomCommand([]byte("cmd"))
 	if err != nil {
 		t.Fatalf("CustomCommand returned error: %v", err)
 	}

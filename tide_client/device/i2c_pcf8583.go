@@ -23,8 +23,7 @@ func init() {
 
 type pcf8583 struct{}
 
-func (pcf8583) NewDevice(conn interface{}, rawConf json.RawMessage) common.StringMapMap {
-	bus := conn.(i2c.Bus)
+func (pcf8583) NewI2CDevice(bus i2c.Bus, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		Addr       uint16 `json:"addr"` //0xA0 convert to decimal .. 160
 		DeviceName string `json:"device_name"`

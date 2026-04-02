@@ -3,8 +3,10 @@ package device
 import (
 	"encoding/json"
 	"log/slog"
+	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
+	"tide/tide_client/protocol/sdi12"
 	"time"
 )
 
@@ -20,8 +22,16 @@ type se200 struct {
 	maxLevel float64
 }
 
-func (d *se200) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]string {
-	conn := c.(*connWrap.ConnUtil)
+var (
+	_ BusDevice   = (*se200)(nil)
+	_ SDI12Device = (*se200)(nil)
+)
+
+func (d *se200) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
+	return d.NewSDI12Device(sdi12.NewSession(bus, sdi12.ModeNative), rawConf)
+}
+
+func (d *se200) NewSDI12Device(session *sdi12.Session, rawConf json.RawMessage) map[string]map[string]string {
 	var conf struct {
 		DeviceName    string  `json:"device_name"`
 		Addr          string  `json:"addr"`
@@ -37,13 +47,13 @@ func (d *se200) NewDevice(c any, rawConf json.RawMessage) map[string]map[string]
 		output = conf.Addr + "00101\r\n" + conf.Addr + "\r\n"
 	)
 	var job = func() *float64 {
-		err = conn.SDI12ConcurrentMeasurement(conf.Addr, conf.ExtraWakeTime, output, time.Second)
+		err = session.ConcurrentMeasurement(conf.Addr, conf.ExtraWakeTime, output, time.Second)
 		if err != nil {
 			slog.Error("Failed to perform SDI-12 concurrent measurement", "device", "SE200", "addr", conf.Addr, "error", err)
 			return nil
 		}
 		//2+01.001\r\n
-		values, err := conn.GetSDI12Data(conf.Addr, conf.ExtraWakeTime, 1)
+		values, err := session.GetData(conf.Addr, conf.ExtraWakeTime, 1)
 		if err != nil {
 			slog.Error("Failed to get SDI-12 data", "device", "SE200", "addr", conf.Addr, "error", err)
 			return nil

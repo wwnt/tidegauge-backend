@@ -8,6 +8,7 @@ import (
 	"tide/common"
 	"tide/pkg"
 	"tide/tide_client/connWrap"
+	"tide/tide_client/protocol/textline"
 )
 
 func init() {
@@ -18,8 +19,7 @@ type hMP155 struct{}
 
 var hmp155Items = map[string]int{"air_humidity": 0, "air_temperature": 1}
 
-func (hMP155) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
-	conn := c.(*connWrap.ConnUtil)
+func (hMP155) NewBusDevice(bus *connWrap.Bus, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
 		DeviceName string            `json:"device_name"`
 		Addr       string            `json:"addr"`
@@ -27,6 +27,7 @@ func (hMP155) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		Items      map[string]string `json:"items"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
+	session := textline.NewSession(bus)
 
 	var (
 		err     error
@@ -35,7 +36,7 @@ func (hMP155) NewDevice(c any, rawConf json.RawMessage) common.StringMapMap {
 		tmpData = make(map[string]*float64)
 	)
 	var job = func() map[string]*float64 {
-		line, err = conn.ReadLine(input)
+		line, err = session.ReadLine(input)
 		if err != nil {
 			slog.Error("IO error while reading from HMP155 device", "error", err)
 			return nil

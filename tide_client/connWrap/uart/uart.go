@@ -45,7 +45,7 @@ type Uart struct {
 	inReconnect atomic.Bool
 }
 
-func NewUart(name string, readTimeout uint32, mode Mode) (connWrap.ConnCommon, error) {
+func StartUart(name string, readTimeout uint32, mode Mode) (connWrap.ConnCommon, error) {
 	c := &Uart{
 		portName:    name,
 		conn:        nil,
@@ -63,25 +63,24 @@ func NewUart(name string, readTimeout uint32, mode Mode) (connWrap.ConnCommon, e
 
 func (c *Uart) reopenUntilSuccess() {
 	if !c.inReconnect.CompareAndSwap(false, true) {
-		// inReconnect == true
 		return
 	}
 	defer c.inReconnect.Store(false)
+
 	if conn := c.loadConn(); conn != nil {
-		// Closing the old port is expected to interrupt any blocked Read/Write.
-		// Keep the closed port published until a replacement is ready so concurrent
-		// callers fail with the underlying I/O error instead of racing with nil.
+		// Keep the closed port published until a replacement port is opened so
+		// in-flight callers fail with the transport error, not a nil deref.
 		_ = conn.Close()
 	}
-	var err error
 	for {
-		if err = c.open(); err != nil {
+		if err := c.open(); err != nil {
 			slog.Error("Failed to connect to UART port", "port", c.portName, "error", err)
-		} else {
-			slog.Info("Successfully connected to UART port", "port", c.portName)
-			break
+			time.Sleep(10 * time.Second)
+			continue
 		}
-		time.Sleep(10 * time.Second)
+
+		slog.Info("Successfully connected to UART port", "port", c.portName)
+		return
 	}
 }
 
