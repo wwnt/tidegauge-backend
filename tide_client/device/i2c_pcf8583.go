@@ -44,6 +44,7 @@ func (pcf8583) NewI2CDevice(bus i2c.Bus, rawConf json.RawMessage) common.StringM
 		if conf.ResetC {
 			_ = setCount(d, 0)
 		}
+		// The hardware counter increments twice per mechanical tip, so the code converts count to rainfall with 0.2 mm/tip.
 		return new(float64(cnt*2) / 10)
 	}
 	AddCronJobWithOneItem(conf.Cron, conf.ItemName, job)

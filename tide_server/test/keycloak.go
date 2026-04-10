@@ -24,7 +24,7 @@ func InitKeycloak(adminUsername string, adminPassword string, replaceRealm bool)
 	}
 createRealm:
 	// Create Keycloak Security Realm for this application
-	_, err = kc.CreateRealm(ctx, token.AccessToken, gocloak.RealmRepresentation{Realm: gocloak.StringP(global.Config.Keycloak.Realm), Enabled: gocloak.BoolP(true)})
+	_, err = kc.CreateRealm(ctx, token.AccessToken, gocloak.RealmRepresentation{Realm: new(global.Config.Keycloak.Realm), Enabled: new(true)})
 	if err != nil {
 		if apiErr := err.(*gocloak.APIError); apiErr.Code != http.StatusConflict {
 			log.Fatal(err)
@@ -41,20 +41,20 @@ createRealm:
 
 	var credentials = []gocloak.CredentialRepresentation{
 		{
-			Type:  gocloak.StringP("password"),
-			Value: gocloak.StringP(adminPassword),
+			Type:  new("password"),
+			Value: new(adminPassword),
 		},
 	}
 
 	// Create Superuser (Only the very first user)
 	_, err = kc.CreateUser(ctx, token.AccessToken, global.Config.Keycloak.Realm,
-		gocloak.User{Username: gocloak.StringP(adminUsername), Enabled: gocloak.BoolP(true), Credentials: &credentials})
+		gocloak.User{Username: new(adminUsername), Enabled: new(true), Credentials: &credentials})
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Create OAuth Client
-	clientId, err := kc.CreateClient(ctx, token.AccessToken, global.Config.Keycloak.Realm, gocloak.Client{ClientID: gocloak.StringP(global.Config.Keycloak.ClientId), DirectAccessGrantsEnabled: gocloak.BoolP(true)})
+	clientId, err := kc.CreateClient(ctx, token.AccessToken, global.Config.Keycloak.Realm, gocloak.Client{ClientID: new(global.Config.Keycloak.ClientId), DirectAccessGrantsEnabled: new(true)})
 	if err != nil {
 		log.Fatal(err)
 	}
