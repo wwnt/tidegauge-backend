@@ -34,6 +34,8 @@ Related Docs: [tide_client guide](../../tide_client/README.md), [Reverse SSH tun
     * [config.analog[]](#configanalog)
 * [devices_uart_rs485_modbus.json](#devices_uart_rs485_modbusjson)
   * [config[]](#config-1)
+* [devices_gpio.json](#devices_gpiojson)
+  * [config[]](#config-2)
 <!-- TOC -->
 
 ## config.json
@@ -174,3 +176,48 @@ Each item in `config[]` is dispatched by [`tide_client/device/transport_uart_rs4
 
 `ANALOG-VOLTAGE-MODBUS` reads one input register with Modbus function `0x04` from register `0`, decodes the `uint16`
 payload, and publishes the result as `rain_intensity`.
+
+# devices_gpio.json
+
+This sample config file exists under [`devices.gpio`](#devicesuart--tcp--gpio), so it is connected directly to a Linux
+GPIO chip.
+
+Top-level fields:
+
+1. `name`: Required Linux GPIO chip name, for example `gpiochip0`.
+2. `config`: Array of GPIO device definitions.
+
+## config[]
+
+Each item in `config[]` is dispatched by [`tide_client/controller/add_gpio_devices.go`](../../tide_client/controller/add_gpio_devices.go).
+
+`GPIOStateDetection` publishes a binary `0/1` value using the GPIO line active state.
+
+Example:
+
+```json
+{
+  "name": "gpiochip0",
+  "config": [
+    {
+      "model": "GPIOStateDetection",
+      "config": {
+        "device_name": "INP2 GPIO State",
+        "pin": 21,
+        "item_name": "inp2_gpio_state",
+        "bias": "pull_up",
+        "active_low": false,
+        "report_initial_value": true
+      }
+    }
+  ]
+}
+```
+
+A few notes:
+
+1. `item_type` defaults to `gpio_state` if omitted. Override it only when a station really needs a more specific business-facing type.
+2. `active_low` flips the active-state logic. With `active_low: true`, a low physical level is reported as `1`.
+3. `bias` controls the internal GPIO bias resistor. Supported values are `pull_up` (default), `pull_down`, `disabled`,
+   and `as_is`.
+4. `report_initial_value` defaults to `true` and sends the current state once at startup.
