@@ -10,8 +10,7 @@ import (
 )
 
 func init() {
-	RegisterDevice("DoorIntrusionDetection", unsupportedGPIODevice("DoorIntrusionDetection"))
-	RegisterDevice("DRD11A", unsupportedGPIODevice("DRD11A"))
+	RegisterDevice("GPIOStateDetection", unsupportedGPIODevice("GPIOStateDetection"))
 	RegisterDevice("RG13", unsupportedGPIODevice("RG13"))
 }
 

@@ -56,8 +56,3 @@ func MergeInfo(dstInfo map[string]map[string]string, srcInfo map[string]map[stri
 		}
 	}
 }
-
-// Float64P returns a pointer of a float64 variable
-func Float64P(value float64) *float64 {
-	return &value
-}
