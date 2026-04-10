@@ -73,7 +73,7 @@ If the token is invalid or expired, the API will return a 401 Unauthorized error
     {
       "station_id": "1048a910-2a2b-11eb-9abd-d89ef3266df6",
       "name": "location1_rain_gauge",
-      "type": "rain_gauge",
+      "type": "rain_volume",
       "device_name": "地点1雨量",
       "status": "NoStatus",
       "status_changed_at": 1729589919395,

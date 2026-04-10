@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"sync/atomic"
 	"syscall"
 	"tide/common"
 	"tide/pkg"
@@ -24,18 +25,27 @@ type rg13 struct{}
 
 func (rg13) NewGPIODevice(gpio *gpiocdev.Chip, rawConf json.RawMessage) common.StringMapMap {
 	var conf struct {
-		DeviceName string `json:"device_name"`
-		Pin        int    `json:"pin"`
-		ItemName   string `json:"item_name"`
-		ActiveLow  bool   `json:"active_low"`
+		DeviceName string  `json:"device_name"`
+		Pin        int     `json:"pin"`
+		ItemName   string  `json:"item_name"`
+		Cron       string  `json:"cron"`
+		Resolution float64 `json:"resolution"`
+		ActiveLow  bool    `json:"active_low"`
 	}
 	pkg.Must(json.Unmarshal(rawConf, &conf))
-	var val = 0.2
+	if conf.Cron == "" {
+		conf.Cron = "@every 1m"
+	}
+	if conf.Resolution == 0 {
+		// GPIO RG13 counts one selected edge per bucket tip, so the default stays at 0.2 mm/tip.
+		conf.Resolution = 0.2
+	}
+	var counter atomic.Int64
 
 	opts := []gpiocdev.LineReqOption{gpiocdev.WithPullUp, gpiocdev.WithRisingEdge,
 		gpiocdev.WithDebounce(time.Millisecond * 50),
 		gpiocdev.WithEventHandler(func(evt gpiocdev.LineEvent) {
-			DataReceive <- []itemData{{At: nowMs(), Typ: common.MsgGpioData, ItemName: conf.ItemName, Value: &val}}
+			counter.Add(1)
 		})}
 	if conf.ActiveLow {
 		opts = append(opts, gpiocdev.AsActiveLow)
@@ -50,5 +60,13 @@ func (rg13) NewGPIODevice(gpio *gpiocdev.Chip, rawConf json.RawMessage) common.S
 	}
 	slog.Info("watch on gpio pin", "pin", conf.Pin)
 	project.RegisterReleaseFunc(func() { _ = ll.Close() })
-	return common.StringMapMap{conf.DeviceName: map[string]string{"rain_gauge": conf.ItemName}}
+
+	job := func() *float64 {
+		tips := counter.Swap(0)
+		// Each counted edge represents one tip, and the counter is reset after every scheduled upload.
+		return new(float64(tips) * conf.Resolution)
+	}
+	AddCronJobWithOneItem(conf.Cron, conf.ItemName, job)
+
+	return common.StringMapMap{conf.DeviceName: map[string]string{"rain_volume": conf.ItemName}}
 }
