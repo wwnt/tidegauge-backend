@@ -23,6 +23,7 @@ Machine-only Markdown such as `AGENTS.md`, `CLAUDE.md`, and `.claude/plans/*.md`
 ## Operations And Troubleshooting
 
 - [Client config reference](client/config-reference.md): `tide_client` configuration fields and sample device config structure.
+- [item_name reference](client/item-name-reference.md): data analyst guide — what each `item_name` represents, which sensor it comes from, and the unit.
 - [Reverse SSH tunnel](client/reverse-ssh-tunnel.md): systemd-based reverse tunnel setup for remote access.
 - [SDI-12 noise mitigation](client/sdi-12-noise-mitigation.md): field guidance for noisy SDI-12 deployments.
 - [Server API guide](server/api-guide.md): login flow and basic data retrieval workflow against the server HTTP API.

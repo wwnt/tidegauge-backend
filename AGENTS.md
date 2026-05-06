@@ -1,14 +1,16 @@
 # Tide Gauge Monorepo
 
 ## Overview
-- Sync model: downstream polls upstream events; gaps trigger a full DB resync.
+- Sync model: long-lived HTTP Upgrade + `yamux` streams carrying protobuf-delimited frames. On (re)connect the side that has gaps sends `ItemsLatest`/`StatusLatest` watermarks, the peer replays the missing rows, then both sides switch to live push.
 
 ## Modules
 - `tide_server/`: central API/auth/sync + Postgres schema and deployment.
 - `tide_client/`: edge collector + device drivers + SQLite storage.
 - `uart-tcp-forward/`: serial device ↔ TCP bridge utility.
+- `internal/syncv2/`, `internal/upstreamauth/`: shared Sync V2 transport/codec and upstream auth helpers.
 - `common/`, `pkg/`: shared libraries.
 - `arduino/`: firmware and protocol notes.
+- `resources/`: architecture diagrams and sensor configuration screenshots.
 
 ## Specs
 - Sync V2: `docs/protocols/sync-v2-protocol.md`
