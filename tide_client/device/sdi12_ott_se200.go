@@ -62,9 +62,9 @@ func (d *se200) NewSDI12Device(session *sdi12.Session, rawConf json.RawMessage) 
 			val := *values[0] + conf.Correction
 			if d.minLevel < val && val < d.maxLevel {
 				return &val
-			} else {
-				return nil
 			}
+
+			return nil
 		}
 		return nil
 	}
