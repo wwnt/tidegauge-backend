@@ -58,18 +58,19 @@ Client                              Server
   │──── ClientHello ──────────────────>│  1. 握手：站点标识 + 协议版本
   │<──── ServerHello ────────────-─────│  2. 服务端确认
   │──── StationInfo ──────────────────>│  3. 设备列表 + 摄像头列表
-  │<──── ItemsLatest ────────────-─────│  4. 服务端已有的每个 item 最新时间戳
-  │<──── StatusLatest ──────────-──────│  5. 服务端已有的最新状态日志行号
+  │──── ClientStatusLatest ──────────-─>│  4. 客户端本地状态日志最新行的 (row_id, changed_at)
+  │<──── ItemsLatest ────────────-─────│  5. 服务端已有的每个 item 最新时间戳
+  │<──── StatusLatest ──────────-──────│  6. 服务端裁剪后已有的最新状态日志行号
   │                                    │
-  │──── DataBatch(replay=true) ───-───>│  6. 补发缺失的历史数据（可能多批）
-  │──── ItemStatusBatch(replay=true) ─>│  7. 补发缺失的状态日志
+  │──── DataBatch(replay=true) ───-───>│  7. 补发缺失的历史数据（可能多批）
+  │──── ItemStatusBatch(replay=true) ─>│  8. 补发缺失的状态日志
   │                                    │
-  │──── DataBatch(replay=false) ──-───>│  8. 实时数据（持续）
-  │──── ItemStatusBatch(replay=false) >│  9. 实时状态变更（持续）
-  │──── RpiStatus ────────────────-───>│ 10. 树莓派状态（持续）
+  │──── DataBatch(replay=false) ──-───>│  9. 实时数据（持续）
+  │──── ItemStatusBatch(replay=false) >│ 10. 实时状态变更（持续）
+  │──── RpiStatus ────────────────-───>│ 11. 树莓派状态（持续）
   │                                    │
-  │<──── CameraSnapshotRequest ───-────│ 11. 服务端请求摄像头快照（按需）
-  │──── CameraSnapshotResponse ──-────>│ 12. 回传完整快照数据或错误
+  │<──── CameraSnapshotRequest ───-────│ 12. 服务端请求摄像头快照（按需）
+  │──── CameraSnapshotResponse ──-────>│ 13. 回传完整快照数据或错误
 ```
 
 ### 流程详解
@@ -95,10 +96,20 @@ Client                              Server
 
 #### 4. 历史数据补发（Replay）
 
-服务端告知客户端已有数据的最新位置：
+握手第 4 步：客户端先把本地 SQLite `item_status_log` 最大 ROWID 行的 `(row_id, changed_at)` 通过 `ClientStatusLatest` 上报。服务端按以下规则裁剪自己的历史，使后续 row_id 不会撞主键：
+
+- 客户端 `latest_row_id == 0`（空库）：服务端若有该站点的状态日志，整表清掉。
+- 客户端 `latest_row_id > 0`：服务端查 `(station_id, latest_row_id)` 行的 `changed_at`：
+  - 不存在 → 服务端落后，无需处理。
+  - 存在且 `changed_at` 一致 → 仅删除 `row_id > latest_row_id` 的尾巴行（多数情况是 no-op）。
+  - 存在但 `changed_at` 不一致 → 视为客户端 SQLite 被重建，整表清掉。
+
+裁剪后会用最新仍存在的日志行重算受影响 `items.status` / `status_changed_at`，无日志兜底为 `('', 'epoch')`。
+
+服务端紧接着告知客户端裁剪后已有数据的最新位置：
 
 - `ItemsLatest`：每个 item 的最新数据时间戳（毫秒）
-- `StatusLatest`：最新状态日志的 RowID
+- `StatusLatest`：最新状态日志的 RowID（裁剪后）
 
 客户端据此查询本地 SQLite，补发缺失数据：
 

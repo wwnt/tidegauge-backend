@@ -31,11 +31,12 @@ func runSyncV2ClientOnce(dataBroker *pubsub.Broker) bool {
 			StationInfoFn: func() common.StationInfoStruct {
 				return stationInfo
 			},
-			GetDataHistory:        db.GetDataHistory,
-			GetItemStatusLogAfter: db.GetItemStatusLogAfter,
-			Subscribe:             dataBroker.Subscribe,
-			Unsubscribe:           dataBroker.Unsubscribe,
-			IngestLock:            &ingestMu,
+			GetDataHistory:         db.GetDataHistory,
+			GetItemStatusLogAfter:  db.GetItemStatusLogAfter,
+			GetItemStatusLogLatest: db.GetItemStatusLogLatest,
+			Subscribe:              dataBroker.Subscribe,
+			Unsubscribe:            dataBroker.Unsubscribe,
+			IngestLock:             &ingestMu,
 			GetCamera: func(name string) (snapshotURL, username, password string, ok bool) {
 				cam, ok := global.Config.Cameras.List[name]
 				if !ok {

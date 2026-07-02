@@ -10,17 +10,17 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/yamux v0.1.2
-	github.com/jackc/pgx/v5 v5.8.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/lmittmann/tint v1.1.3
-	github.com/mattn/go-sqlite3 v1.14.37
+	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.11.1
 	github.com/warthog618/go-gpiocdev v0.9.1
 	github.com/wwnt/modbus v0.1.1
 	go.bug.st/serial v1.6.4
-	golang.org/x/crypto v0.49.0
+	golang.org/x/crypto v0.50.0
 	google.golang.org/protobuf v1.36.11
-	periph.io/x/conn/v3 v3.7.2
+	periph.io/x/conn/v3 v3.7.3
 	periph.io/x/devices/v3 v3.7.4
 	periph.io/x/host/v3 v3.8.5
 )
@@ -41,7 +41,7 @@ require (
 	github.com/segmentio/ksuid v1.0.4 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

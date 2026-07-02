@@ -1,6 +1,9 @@
 package db
 
 import (
+	"database/sql"
+	"errors"
+
 	"tide/common"
 )
 
@@ -54,4 +57,15 @@ func GetItemStatusLogAfter(after int64) ([]common.RowIdItemStatusStruct, error) 
 		return nil, err
 	}
 	return ds, err
+}
+
+// GetItemStatusLogLatest 返回 item_status_log 最大 ROWID 行的 (rowID, changed_at)。
+// 表为空时返回 (0, 0, nil)。
+func GetItemStatusLogLatest() (int64, int64, error) {
+	var rowID, changedAt int64
+	err := db.QueryRow(`select ROWID, changed_at from item_status_log order by ROWID desc limit 1`).Scan(&rowID, &changedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, nil
+	}
+	return rowID, changedAt, err
 }

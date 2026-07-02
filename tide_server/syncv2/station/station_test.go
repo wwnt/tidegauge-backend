@@ -26,6 +26,8 @@ type fakeStore struct {
 	itemsLatest       map[string]int64
 	latestStatusRowID int64
 
+	itemStatusLogRows map[int64]int64 // rowID -> changedAtUnixMs
+
 	mu                  sync.Mutex
 	updateItemStatusLog []common.RowIdItemStatusStruct
 	updateItemStatus    []struct {
@@ -33,6 +35,10 @@ type fakeStore struct {
 		status common.Status
 		at     time.Time
 	}
+
+	prunedAll       bool
+	prunedTailRowID int64
+	prunedTailCalls int
 }
 
 func (s *fakeStore) StationIDByIdentifier(identifier string) (uuid.UUID, error) {
@@ -94,6 +100,40 @@ func (s *fakeStore) UpdateAndSaveStatusLog(stationID uuid.UUID, rowID int64, ite
 		},
 	})
 	return true, nil
+}
+
+func (s *fakeStore) ItemStatusLogChangedAt(stationID uuid.UUID, rowID int64) (time.Time, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ms, ok := s.itemStatusLogRows[rowID]
+	if !ok {
+		return time.Time{}, false, nil
+	}
+	return custype.UnixMs(ms).ToTime(), true, nil
+}
+
+func (s *fakeStore) PruneItemStatusLog(stationID uuid.UUID, rowID int64, all bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if all {
+		s.prunedAll = true
+		s.itemStatusLogRows = nil
+		s.latestStatusRowID = 0
+		return nil
+	}
+	s.prunedTailRowID = rowID
+	s.prunedTailCalls++
+	if s.itemStatusLogRows != nil {
+		for k := range s.itemStatusLogRows {
+			if k > rowID {
+				delete(s.itemStatusLogRows, k)
+			}
+		}
+	}
+	if s.latestStatusRowID > rowID {
+		s.latestStatusRowID = rowID
+	}
+	return nil
 }
 
 type fakeInfoSyncer struct {
@@ -231,6 +271,10 @@ func doHandshake(t *testing.T, clientStream internalsyncv2.StationMessageStream,
 		}),
 	}}))
 
+	require.NoError(t, clientStream.Send(&syncpb.StationMessage{Body: &syncpb.StationMessage_ClientStatusLatest{
+		ClientStatusLatest: &syncpb.ClientStatusLatest{LatestRowId: 0, LatestChangedAtUnixMs: 0},
+	}}))
+
 	f, err = clientStream.Recv()
 	require.NoError(t, err)
 	_, ok = f.Body.(*syncpb.StationMessage_ItemsLatest)
@@ -259,6 +303,7 @@ func TestServer_StreamStation_HandshakeAndLatest(t *testing.T) {
 		stationID:         stationID,
 		itemsLatest:       map[string]int64{"item1": 1234},
 		latestStatusRowID: 42,
+		itemStatusLogRows: map[int64]int64{42: 1000},
 	}
 	infoSyncer := &fakeInfoSyncer{}
 	notifier := &fakeNotifier{stationStatusCh: make(chan common.StationStatusStruct, 4)}
@@ -292,6 +337,10 @@ func TestServer_StreamStation_HandshakeAndLatest(t *testing.T) {
 			Devices:    common.StringMapMap{"dev1": {"t1": "item1"}},
 			Cameras:    []string{"cam1"},
 		}),
+	}}))
+
+	require.NoError(t, sessions.clientMainStream.Send(&syncpb.StationMessage{Body: &syncpb.StationMessage_ClientStatusLatest{
+		ClientStatusLatest: &syncpb.ClientStatusLatest{LatestRowId: 42, LatestChangedAtUnixMs: 1000},
 	}}))
 
 	f, err = sessions.clientMainStream.Recv()
@@ -588,6 +637,161 @@ func TestServer_StreamStation_DataBatchReplayVsRealtime(t *testing.T) {
 		}
 	}
 	require.True(t, foundNoStatus, "expected UpdateItemStatus(NoStatus) call for GPIO data")
+
+	_ = sessions.clientSession.Close()
+	cancel()
+	_ = <-errCh
+}
+
+func runHandshakeWithClientStatus(t *testing.T, store *fakeStore, clientLatestRowID, clientChangedAt int64) (latestStatusFromServer int64, errCh <-chan error, sessions *stationSessions, cancel context.CancelFunc) {
+	t.Helper()
+
+	srv := &Server{
+		Store:      store,
+		InfoSyncer: &fakeInfoSyncer{},
+		Notifier:   &fakeNotifier{stationStatusCh: make(chan common.StationStatusStruct, 4)},
+	}
+
+	sessions = newStationSessions(t)
+	ctx, c := context.WithCancel(context.Background())
+	cancel = c
+	t.Cleanup(cancel)
+
+	ch := make(chan error, 1)
+	go func() {
+		ch <- srv.StreamStation(ctx, sessions.serverMainStream, sessions.openServerCommandStream, "1.2.3.4:5555")
+	}()
+	errCh = ch
+
+	require.NoError(t, sessions.clientMainStream.Send(&syncpb.StationMessage{Body: &syncpb.StationMessage_ClientHello{
+		ClientHello: &syncpb.ClientHello{StationIdentifier: "station1", ProtocolVersion: internalsyncv2.ProtocolVersion},
+	}}))
+	f, err := sessions.clientMainStream.Recv()
+	require.NoError(t, err)
+	_, ok := f.Body.(*syncpb.StationMessage_ServerHello)
+	require.True(t, ok)
+
+	require.NoError(t, sessions.clientMainStream.Send(&syncpb.StationMessage{Body: &syncpb.StationMessage_StationInfo{
+		StationInfo: internalsyncv2.StationInfoToPB(common.StationInfoStruct{
+			Identifier: "station1",
+			Devices:    common.StringMapMap{"dev1": {"t1": "item1"}},
+		}),
+	}}))
+	require.NoError(t, sessions.clientMainStream.Send(&syncpb.StationMessage{Body: &syncpb.StationMessage_ClientStatusLatest{
+		ClientStatusLatest: &syncpb.ClientStatusLatest{LatestRowId: clientLatestRowID, LatestChangedAtUnixMs: clientChangedAt},
+	}}))
+
+	f, err = sessions.clientMainStream.Recv()
+	require.NoError(t, err)
+	_, ok = f.Body.(*syncpb.StationMessage_ItemsLatest)
+	require.True(t, ok)
+
+	f, err = sessions.clientMainStream.Recv()
+	require.NoError(t, err)
+	statusFrame, ok := f.Body.(*syncpb.StationMessage_StatusLatest)
+	require.True(t, ok)
+	latestStatusFromServer = statusFrame.StatusLatest.LatestRowId
+	return
+}
+
+func TestServer_StreamStation_PrunesOnRebuild(t *testing.T) {
+	stationID := uuid.New()
+	store := &fakeStore{
+		stationID:         stationID,
+		itemsLatest:       map[string]int64{},
+		latestStatusRowID: 42,
+		itemStatusLogRows: map[int64]int64{42: 1000},
+	}
+	latest, errCh, sessions, cancel := runHandshakeWithClientStatus(t, store, 42, 999)
+	require.Equal(t, int64(0), latest)
+
+	store.mu.Lock()
+	require.True(t, store.prunedAll)
+	store.mu.Unlock()
+
+	_ = sessions.clientSession.Close()
+	cancel()
+	_ = <-errCh
+}
+
+func TestServer_StreamStation_PrunesOnEmptyClient(t *testing.T) {
+	stationID := uuid.New()
+	store := &fakeStore{
+		stationID:         stationID,
+		itemsLatest:       map[string]int64{},
+		latestStatusRowID: 42,
+		itemStatusLogRows: map[int64]int64{42: 1000},
+	}
+	latest, errCh, sessions, cancel := runHandshakeWithClientStatus(t, store, 0, 0)
+	require.Equal(t, int64(0), latest)
+
+	store.mu.Lock()
+	require.True(t, store.prunedAll)
+	store.mu.Unlock()
+
+	_ = sessions.clientSession.Close()
+	cancel()
+	_ = <-errCh
+}
+
+func TestServer_StreamStation_NoPruneWhenConsistent(t *testing.T) {
+	stationID := uuid.New()
+	store := &fakeStore{
+		stationID:         stationID,
+		itemsLatest:       map[string]int64{},
+		latestStatusRowID: 42,
+		itemStatusLogRows: map[int64]int64{42: 1000},
+	}
+	latest, errCh, sessions, cancel := runHandshakeWithClientStatus(t, store, 42, 1000)
+	require.Equal(t, int64(42), latest)
+
+	store.mu.Lock()
+	require.False(t, store.prunedAll)
+	require.Zero(t, store.prunedTailCalls)
+	store.mu.Unlock()
+
+	_ = sessions.clientSession.Close()
+	cancel()
+	_ = <-errCh
+}
+
+func TestServer_StreamStation_PrunesTrailingTail(t *testing.T) {
+	stationID := uuid.New()
+	store := &fakeStore{
+		stationID:         stationID,
+		itemsLatest:       map[string]int64{},
+		latestStatusRowID: 99,
+		itemStatusLogRows: map[int64]int64{42: 1000, 99: 2000},
+	}
+	latest, errCh, sessions, cancel := runHandshakeWithClientStatus(t, store, 42, 1000)
+	require.Equal(t, int64(42), latest)
+
+	store.mu.Lock()
+	require.False(t, store.prunedAll)
+	require.Equal(t, 1, store.prunedTailCalls)
+	require.Equal(t, int64(42), store.prunedTailRowID)
+	store.mu.Unlock()
+
+	_ = sessions.clientSession.Close()
+	cancel()
+	_ = <-errCh
+}
+
+func TestServer_StreamStation_NoPruneWhenClientAhead(t *testing.T) {
+	stationID := uuid.New()
+	store := &fakeStore{
+		stationID:         stationID,
+		itemsLatest:       map[string]int64{},
+		latestStatusRowID: 42,
+		itemStatusLogRows: map[int64]int64{42: 1000},
+	}
+	latest, errCh, sessions, cancel := runHandshakeWithClientStatus(t, store, 100, 5000)
+	require.Equal(t, int64(42), latest)
+
+	store.mu.Lock()
+	require.False(t, store.prunedAll)
+	require.Zero(t, store.prunedTailCalls)
+	store.mu.Unlock()
 
 	_ = sessions.clientSession.Close()
 	cancel()

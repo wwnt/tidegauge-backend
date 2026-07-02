@@ -15,6 +15,7 @@ import (
 
 type GetDataHistoryFn func(item string, startUnixMs, endUnixMs int64) ([]common.DataTimeStruct, error)
 type GetItemStatusLogAfterFn func(afterRowID int64) ([]common.RowIdItemStatusStruct, error)
+type GetItemStatusLogLatestFn func() (rowID int64, changedAtUnixMs int64, err error)
 type SubscribeFn func(*pubsub.Subscriber, pubsub.TopicSet)
 type UnsubscribeFn func(*pubsub.Subscriber)
 type GetCameraFn func(name string) (snapshotURL, username, password string, ok bool)
@@ -26,16 +27,17 @@ type Config struct {
 }
 
 type Deps struct {
-	StationInfoFn         func() common.StationInfoStruct
-	GetDataHistory        GetDataHistoryFn
-	GetItemStatusLogAfter GetItemStatusLogAfterFn
-	Subscribe             SubscribeFn
-	Unsubscribe           UnsubscribeFn
-	IngestLock            sync.Locker
-	GetCamera             GetCameraFn
-	Snapshot              SnapshotFn
-	HTTPClient            *http.Client
-	Logger                *slog.Logger
+	StationInfoFn          func() common.StationInfoStruct
+	GetDataHistory         GetDataHistoryFn
+	GetItemStatusLogAfter  GetItemStatusLogAfterFn
+	GetItemStatusLogLatest GetItemStatusLogLatestFn
+	Subscribe              SubscribeFn
+	Unsubscribe            UnsubscribeFn
+	IngestLock             sync.Locker
+	GetCamera              GetCameraFn
+	Snapshot               SnapshotFn
+	HTTPClient             *http.Client
+	Logger                 *slog.Logger
 }
 
 type Client struct {
@@ -60,6 +62,9 @@ func NewClient(cfg Config, deps Deps) (*Client, error) {
 	}
 	if deps.GetItemStatusLogAfter == nil {
 		return nil, errors.New("get item status log after func is nil")
+	}
+	if deps.GetItemStatusLogLatest == nil {
+		return nil, errors.New("get item status log latest func is nil")
 	}
 	if deps.Subscribe == nil {
 		return nil, errors.New("subscribe func is nil")

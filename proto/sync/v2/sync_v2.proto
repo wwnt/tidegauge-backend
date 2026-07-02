@@ -46,6 +46,11 @@ message StatusLatest {
   int64 latest_row_id = 1;
 }
 
+message ClientStatusLatest {
+  int64 latest_row_id = 1;             // 客户端 SQLite item_status_log 当前 max(ROWID)；空库为 0
+  int64 latest_changed_at_unix_ms = 2; // 上面那行的 changed_at；空库为 0
+}
+
 enum DataKind {
   DATA_KIND_UNSPECIFIED = 0;
   DATA_KIND_NORMAL = 1;
@@ -109,6 +114,7 @@ message StationMessage {
     CameraSnapshotRequest camera_snapshot_request = 9;
     CameraSnapshotResponse camera_snapshot_response = 10;
     ErrorFrame error = 11;
+    ClientStatusLatest client_status_latest = 12;
   }
 }
 

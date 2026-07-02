@@ -20,8 +20,10 @@ import (
 )
 
 type fakeStore struct {
-	dataByItem map[string][]common.DataTimeStruct
-	statusLogs []common.RowIdItemStatusStruct
+	dataByItem            map[string][]common.DataTimeStruct
+	statusLogs            []common.RowIdItemStatusStruct
+	latestRowID           int64
+	latestChangedAtUnixMs int64
 }
 
 func (s fakeStore) GetDataHistory(item string, startUnixMs, endUnixMs int64) ([]common.DataTimeStruct, error) {
@@ -30,6 +32,10 @@ func (s fakeStore) GetDataHistory(item string, startUnixMs, endUnixMs int64) ([]
 
 func (s fakeStore) GetItemStatusLogAfter(afterRowID int64) ([]common.RowIdItemStatusStruct, error) {
 	return s.statusLogs, nil
+}
+
+func (s fakeStore) GetItemStatusLogLatest() (int64, int64, error) {
+	return s.latestRowID, s.latestChangedAtUnixMs, nil
 }
 
 type fakeBroker struct {
@@ -166,13 +172,14 @@ func TestClient_RunOnConn_ReplayRealtimeAndSnapshot(t *testing.T) {
 					Cameras: []string{"cam1"},
 				}
 			},
-			GetDataHistory:        store.GetDataHistory,
-			GetItemStatusLogAfter: store.GetItemStatusLogAfter,
-			Subscribe:             broker.Subscribe,
-			Unsubscribe:           broker.Unsubscribe,
-			IngestLock:            &sync.Mutex{},
-			GetCamera:             cameraLookup.GetCamera,
-			Snapshot:              snapshotter.Snapshot,
+			GetDataHistory:         store.GetDataHistory,
+			GetItemStatusLogAfter:  store.GetItemStatusLogAfter,
+			GetItemStatusLogLatest: store.GetItemStatusLogLatest,
+			Subscribe:              broker.Subscribe,
+			Unsubscribe:            broker.Unsubscribe,
+			IngestLock:             &sync.Mutex{},
+			GetCamera:              cameraLookup.GetCamera,
+			Snapshot:               snapshotter.Snapshot,
 		},
 	)
 	require.NoError(t, err)
@@ -195,6 +202,13 @@ func TestClient_RunOnConn_ReplayRealtimeAndSnapshot(t *testing.T) {
 		info, ok := f.Body.(*syncpb.StationMessage_StationInfo)
 		require.True(t, ok)
 		require.Equal(t, "station1", info.StationInfo.Identifier)
+	}
+	{
+		f := recvStationFrame(t, serverStream)
+		csl, ok := f.Body.(*syncpb.StationMessage_ClientStatusLatest)
+		require.True(t, ok)
+		require.Equal(t, int64(0), csl.ClientStatusLatest.LatestRowId)
+		require.Equal(t, int64(0), csl.ClientStatusLatest.LatestChangedAtUnixMs)
 	}
 
 	require.NoError(t, serverStream.Send(&syncpb.StationMessage{Body: &syncpb.StationMessage_ItemsLatest{
@@ -312,13 +326,14 @@ func TestClient_RunOnConn_SnapshotCameraNotFound(t *testing.T) {
 					Cameras: []string{},
 				}
 			},
-			GetDataHistory:        store.GetDataHistory,
-			GetItemStatusLogAfter: store.GetItemStatusLogAfter,
-			Subscribe:             broker.Subscribe,
-			Unsubscribe:           broker.Unsubscribe,
-			IngestLock:            &sync.Mutex{},
-			GetCamera:             cameraLookup.GetCamera,
-			Snapshot:              snapshotter.Snapshot,
+			GetDataHistory:         store.GetDataHistory,
+			GetItemStatusLogAfter:  store.GetItemStatusLogAfter,
+			GetItemStatusLogLatest: store.GetItemStatusLogLatest,
+			Subscribe:              broker.Subscribe,
+			Unsubscribe:            broker.Unsubscribe,
+			IngestLock:             &sync.Mutex{},
+			GetCamera:              cameraLookup.GetCamera,
+			Snapshot:               snapshotter.Snapshot,
 		},
 	)
 	require.NoError(t, err)
@@ -330,6 +345,7 @@ func TestClient_RunOnConn_SnapshotCameraNotFound(t *testing.T) {
 		ServerHello: &syncpb.ServerHello{ServerVersion: "test"},
 	}}))
 	_ = recvStationFrame(t, serverStream) // station info
+	_ = recvStationFrame(t, serverStream) // client status latest
 	require.NoError(t, serverStream.Send(&syncpb.StationMessage{Body: &syncpb.StationMessage_ItemsLatest{
 		ItemsLatest: &syncpb.ItemsLatest{LatestUnixMs: map[string]int64{"item1": 0}},
 	}}))
@@ -374,13 +390,14 @@ func TestClient_RunOnConn_DroppedSubscriberClosesSession(t *testing.T) {
 					},
 				}
 			},
-			GetDataHistory:        store.GetDataHistory,
-			GetItemStatusLogAfter: store.GetItemStatusLogAfter,
-			Subscribe:             broker.Subscribe,
-			Unsubscribe:           broker.Unsubscribe,
-			IngestLock:            &sync.Mutex{},
-			GetCamera:             fakeCameraLookup{}.GetCamera,
-			Snapshot:              fakeSnapshotter{}.Snapshot,
+			GetDataHistory:         store.GetDataHistory,
+			GetItemStatusLogAfter:  store.GetItemStatusLogAfter,
+			GetItemStatusLogLatest: store.GetItemStatusLogLatest,
+			Subscribe:              broker.Subscribe,
+			Unsubscribe:            broker.Unsubscribe,
+			IngestLock:             &sync.Mutex{},
+			GetCamera:              fakeCameraLookup{}.GetCamera,
+			Snapshot:               fakeSnapshotter{}.Snapshot,
 		},
 	)
 	require.NoError(t, err)
@@ -392,6 +409,7 @@ func TestClient_RunOnConn_DroppedSubscriberClosesSession(t *testing.T) {
 		ServerHello: &syncpb.ServerHello{ServerVersion: "test"},
 	}}))
 	_ = recvStationFrame(t, serverStream)
+	_ = recvStationFrame(t, serverStream) // client status latest
 	require.NoError(t, serverStream.Send(&syncpb.StationMessage{Body: &syncpb.StationMessage_ItemsLatest{
 		ItemsLatest: &syncpb.ItemsLatest{LatestUnixMs: map[string]int64{"item1": 0}},
 	}}))

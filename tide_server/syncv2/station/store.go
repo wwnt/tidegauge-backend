@@ -24,6 +24,12 @@ type Store interface {
 
 	SaveItemStatusLog(stationID uuid.UUID, rowID int64, itemName string, status common.Status, at time.Time) (inserted bool, err error)
 	UpdateAndSaveStatusLog(stationID uuid.UUID, rowID int64, itemName string, status common.Status, at time.Time) (inserted bool, err error)
+
+	// ItemStatusLogChangedAt returns the changed_at timestamp of (stationID, rowID) and whether such a row exists.
+	ItemStatusLogChangedAt(stationID uuid.UUID, rowID int64) (changedAt time.Time, found bool, err error)
+	// PruneItemStatusLog deletes rows from item_status_log for the station and recomputes items.status accordingly.
+	// When all=true, all rows for the station are removed; otherwise rows with row_id > rowID are removed.
+	PruneItemStatusLog(stationID uuid.UUID, rowID int64, all bool) error
 }
 
 type InfoSyncer interface {

@@ -75,6 +75,22 @@ Sqlite Database configuration.
 
 This is also known as a DSN (Data Source Name) string. [Check the sqlite driver documentation](https://pkg.go.dev/github.com/mattn/go-sqlite3).
 
+For deployed stations, use conservative SQLite parameters in the DSN:
+
+- `_journal_mode=WAL`
+- `_foreign_keys=on`
+
+Example:
+
+```json
+"dsn": "file:data.db?_journal_mode=WAL&_foreign_keys=on"
+```
+
+These settings reduce the risk of database corruption during sudden power loss by keeping SQLite journaling enabled.
+The sqlite driver uses `synchronous=NORMAL` and `busy_timeout=5000` by default, so a sudden power loss may lose
+recent writes but should still keep the database file consistent. These settings cannot compensate for storage
+devices or filesystems that do not reliably flush writes to persistent media.
+
 ### db.hold_days
 
 The number of days to keep time-series data in the local SQLite database.

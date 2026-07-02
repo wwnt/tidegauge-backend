@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"github.com/google/uuid"
 	"tide/common"
 	"time"
@@ -59,6 +60,87 @@ func UpdateAndSaveStatusLog(stationId uuid.UUID, rowId int64, itemName string, s
 		}
 	}
 	return n, tx.Commit()
+}
+
+// GetItemStatusLogChangedAt 返回 (station_id, row_id) 行的 changed_at。
+// 行不存在时返回 (zeroTime, false, nil)。
+func GetItemStatusLogChangedAt(stationId uuid.UUID, rowId int64) (time.Time, bool, error) {
+	var changedAt time.Time
+	err := TideDB.QueryRow(`select changed_at from item_status_log where station_id=$1 and row_id=$2`, stationId, rowId).Scan(&changedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	return changedAt, true, nil
+}
+
+// PruneItemStatusLogAndRecomputeItems 删除 item_status_log 中受影响的行（all=true 删全部该站点；
+// 否则删 row_id > rowId 的尾巴），并重算受影响 items 的 status / status_changed_at。
+// 重算用与 db.SyncItem 一致的 latestStatus CTE，无日志兜底为 ('', 'epoch')。
+func PruneItemStatusLogAndRecomputeItems(stationId uuid.UUID, rowId int64, all bool) (int64, error) {
+	tx, err := TideDB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var (
+		deleteSQL  string
+		affectArgs []any
+	)
+	if all {
+		deleteSQL = `delete from item_status_log where station_id=$1`
+		affectArgs = []any{stationId}
+	} else {
+		deleteSQL = `delete from item_status_log where station_id=$1 and row_id>$2`
+		affectArgs = []any{stationId, rowId}
+	}
+
+	rows, err := tx.Query(`select distinct item_name from item_status_log where `+func() string {
+		if all {
+			return `station_id=$1`
+		}
+		return `station_id=$1 and row_id>$2`
+	}(), affectArgs...)
+	if err != nil {
+		return 0, err
+	}
+	var affectedItems []string
+	for rows.Next() {
+		var name string
+		if err = rows.Scan(&name); err != nil {
+			_ = rows.Close()
+			return 0, err
+		}
+		affectedItems = append(affectedItems, name)
+	}
+	_ = rows.Close()
+	if err = rows.Err(); err != nil {
+		return 0, err
+	}
+
+	res, err := tx.Exec(deleteSQL, affectArgs...)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	for _, itemName := range affectedItems {
+		_, err = tx.Exec(`with latestStatus as ((select status, changed_at from item_status_log where station_id=$1 and item_name=$2 order by row_id desc limit 1)
+union (select '', 'epoch'::timestamptz) order by changed_at desc limit 1)
+update items set status=(select status from latestStatus), status_changed_at=(select changed_at from latestStatus) where station_id=$1 and name=$2`,
+			stationId, itemName)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return deleted, tx.Commit()
 }
 
 type pagedItemStatusLogStruct struct {

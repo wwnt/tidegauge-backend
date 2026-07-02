@@ -97,6 +97,10 @@ func (s *Server) StreamStation(ctx context.Context, stream internalsyncv2.Statio
 
 	log.Info("v2 station connected", "identifier", stationInfo.Identifier, "remote", remoteAddr)
 
+	if err = s.applyClientStatusLatest(stream, stationID); err != nil {
+		return err
+	}
+
 	itemsLatest, err := s.Store.ItemsLatest(stationID, stationInfo.Devices)
 	if err != nil {
 		return fmt.Errorf("failed to get item latest: %w", err)
@@ -203,6 +207,63 @@ func recvStationInfo(stream internalsyncv2.StationMessageStream) (common.Station
 		return common.StationInfoStruct{}, errors.New("invalid station_info content")
 	}
 	return ret, nil
+}
+
+func recvClientStatusLatest(stream internalsyncv2.StationMessageStream) (*syncpb.ClientStatusLatest, error) {
+	frame, err := stream.Recv()
+	if err != nil {
+		return nil, err
+	}
+	body, ok := frame.Body.(*syncpb.StationMessage_ClientStatusLatest)
+	if !ok || body.ClientStatusLatest == nil {
+		return nil, errors.New("expected client_status_latest frame")
+	}
+	return body.ClientStatusLatest, nil
+}
+
+// applyClientStatusLatest reconciles the server's item_status_log with the client's local watermark.
+// If the client reports an empty log while the server has rows, or if the row identified by the
+// client's latest_row_id has a different changed_at on the server, the server treats the local SQLite
+// as recreated and prunes all rows for the station. When the watermarks match content-wise, any
+// trailing rows beyond the client's max are pruned defensively.
+func (s *Server) applyClientStatusLatest(stream internalsyncv2.StationMessageStream, stationID uuid.UUID) error {
+	clientLatest, err := recvClientStatusLatest(stream)
+	if err != nil {
+		return err
+	}
+	serverLatest, err := s.Store.LatestStatusLogRowID(stationID)
+	if err != nil {
+		return fmt.Errorf("failed to get latest status row id: %w", err)
+	}
+
+	if clientLatest.LatestRowId == 0 {
+		if serverLatest > 0 {
+			if err := s.Store.PruneItemStatusLog(stationID, 0, true); err != nil {
+				return fmt.Errorf("failed to prune item status log: %w", err)
+			}
+		}
+		return nil
+	}
+
+	changedAt, found, err := s.Store.ItemStatusLogChangedAt(stationID, clientLatest.LatestRowId)
+	if err != nil {
+		return fmt.Errorf("failed to inspect item status log: %w", err)
+	}
+	if !found {
+		return nil
+	}
+	if custype.ToUnixMs(changedAt).ToInt64() != clientLatest.LatestChangedAtUnixMs {
+		if err := s.Store.PruneItemStatusLog(stationID, 0, true); err != nil {
+			return fmt.Errorf("failed to prune item status log: %w", err)
+		}
+		return nil
+	}
+	if serverLatest > clientLatest.LatestRowId {
+		if err := s.Store.PruneItemStatusLog(stationID, clientLatest.LatestRowId, false); err != nil {
+			return fmt.Errorf("failed to prune item status log tail: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleDataBatch(stationID uuid.UUID, batch *syncpb.DataBatch) error {

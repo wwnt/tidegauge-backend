@@ -18,4 +18,3 @@
 
 ## Tooling
 - Do not set `GOCACHE` to a path under this repo and do not create a `.gocache/` directory in the workspace.
-- When running Go commands that would populate the default Go build cache (e.g. `go test ./...`), run them outside the sandbox so Go can use its normal cache location.

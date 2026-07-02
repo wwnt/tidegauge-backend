@@ -21,7 +21,7 @@
 		]
 	},
 	"db": {
-		"dsn": "data.db",
+		"dsn": "file:data.db?_journal_mode=WAL&_foreign_keys=on",
 		"hold_days": 90
 	},
 	"gnss": {

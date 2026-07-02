@@ -74,6 +74,19 @@ func (c *Client) runOnConn(ctx context.Context, conn net.Conn) error {
 		return err
 	}
 
+	clientLatestRowID, clientLatestChangedAt, err := c.deps.GetItemStatusLogLatest()
+	if err != nil {
+		return err
+	}
+	if err := c.sendMainFrame(ctx, stream, &syncpb.StationMessage{
+		Body: &syncpb.StationMessage_ClientStatusLatest{ClientStatusLatest: &syncpb.ClientStatusLatest{
+			LatestRowId:           clientLatestRowID,
+			LatestChangedAtUnixMs: clientLatestChangedAt,
+		}},
+	}); err != nil {
+		return err
+	}
+
 	itemsLatest, latestStatusLogRowID, err := c.recvLatestFrames(stream)
 	if err != nil {
 		return err

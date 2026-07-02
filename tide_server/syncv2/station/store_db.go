@@ -70,4 +70,13 @@ func (DBStore) UpdateAndSaveStatusLog(stationID uuid.UUID, rowID int64, itemName
 	return n > 0, err
 }
 
+func (DBStore) ItemStatusLogChangedAt(stationID uuid.UUID, rowID int64) (time.Time, bool, error) {
+	return db.GetItemStatusLogChangedAt(stationID, rowID)
+}
+
+func (DBStore) PruneItemStatusLog(stationID uuid.UUID, rowID int64, all bool) error {
+	_, err := db.PruneItemStatusLogAndRecomputeItems(stationID, rowID, all)
+	return err
+}
+
 var _ = custype.UnixMs(0)
