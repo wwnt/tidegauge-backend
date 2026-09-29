@@ -119,7 +119,6 @@ func upgradeWsMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		defer func() { _ = ws.CloseNow() }()
-		ws.SetReadLimit(16 << 20)
 
 		next.ServeHTTP(w, withWSConn(r, ws))
 	})

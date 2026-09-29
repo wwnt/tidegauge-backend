@@ -60,7 +60,8 @@ func (d *se200) NewSDI12Device(session *sdi12.Session, rawConf json.RawMessage) 
 		}
 		if values[0] != nil {
 			val := *values[0] + conf.Correction
-			if d.minLevel < val && val < d.maxLevel {
+			// 闭区间：恰好等于上下限的读数保留（原先用严格不等号，会丢掉边界值）。
+			if d.minLevel <= val && val <= d.maxLevel {
 				return &val
 			}
 

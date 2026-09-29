@@ -308,6 +308,52 @@ func TestWebapi(t *testing.T) {
 
 				assert.Equal(t, tmpData, data)
 			})
+
+			t.Run("global", func(t *testing.T) {
+				var header = make(http.Header)
+				header.Set("Cookie", "token="+token)
+				url := "ws" + strings.TrimPrefix(testServer.URL, "http") + "/ws/global"
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				ws, _, err := websocket.Dial(ctx, url, &websocket.DialOptions{
+					HTTPHeader: header,
+				})
+				require.NoError(t, err)
+				defer ws.CloseNow()
+
+				// /ws/global pushes BrokerStatus messages; subscribing happens server side.
+				want := SendMsgStruct{
+					Type: kMsgUpdateStationStatus,
+					Body: common.StationStatusStruct{
+						StationId:  station1.Id,
+						Identifier: station1.Identifier,
+					},
+				}
+				done := make(chan struct{})
+				defer close(done)
+				go func() {
+					ticker := time.NewTicker(50 * time.Millisecond)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-done:
+							return
+						case <-ctx.Done():
+							return
+						case <-ticker.C:
+							hub.Publish(BrokerStatus, want, nil)
+						}
+					}
+				}()
+				hub.Publish(BrokerStatus, want, nil)
+
+				var msg SendMsgStruct
+				err = wsjson.Read(ctx, ws, &msg)
+				require.NoError(t, err)
+
+				assert.Equal(t, kMsgUpdateStationStatus, msg.Type)
+				assert.Equal(t, station1.Identifier, msg.Body.(map[string]any)["identifier"])
+			})
 		})
 	})
 }

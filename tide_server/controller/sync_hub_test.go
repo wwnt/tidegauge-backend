@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -28,6 +29,23 @@ func TestSyncHub_NewSubscriber_NilMessageDoesNotStopWriterLoop(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("expected nil not to stop writer loop")
 		}
+	}
+}
+
+func TestSyncHub_NewSubscriber_WriteFailureCancelsContext(t *testing.T) {
+	h := &SyncHub{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	subscriber := h.NewSubscriber(ctx, cancel, func(any) error {
+		return errors.New("write failed")
+	})
+	subscriber.Ch <- "message"
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("expected write failure to cancel subscriber context")
 	}
 }
 

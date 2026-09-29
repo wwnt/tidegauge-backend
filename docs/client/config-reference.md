@@ -31,6 +31,7 @@ Related Docs: [tide_client guide](../../tide_client/README.md), [Reverse SSH tun
   * [config.sdi12 | analog](#configsdi12--analog)
     * [config.sdi12[].model](#configsdi12model)
     * [config.sdi12[].config](#configsdi12config)
+    * [OTT PLS-C plausibility windows](#ott-pls-c-plausibility-windows)
     * [config.analog[]](#configanalog)
 * [devices_uart_rs485_modbus.json](#devices_uart_rs485_modbusjson)
   * [config[]](#config-1)
@@ -173,6 +174,26 @@ A few notes:
 4. cron: The cron expression used to read the data.
    [Check the cron documentation](https://pkg.go.dev/github.com/robfig/cron/v3),
    and Seconds field is optional.[Check the code where is setting `cron.SecondOptional`](../../tide_client/global/config.go)
+
+### OTT PLS-C plausibility windows
+
+The PLS-C driver discards a reading that falls outside a fixed plausibility window and
+reports that item as missing. The windows are built into the driver and are **not**
+configurable per station:
+
+| Item | Accepted range |
+| --- | --- |
+| `water_level` | -5 ... 100 m |
+| `water_temperature` | -8 ... 40 C |
+| `water_conductivity` | 0.005 ... 100 mS/cm |
+| `water_salinity` | 0 ... 60 |
+| `water_total_dissolved_solids` | 0 ... 60 |
+
+The bounds are inclusive, and they are wide enough to cover every PLS-C hardware variant
+(level variants range over 0...100 m water column, conductivity over 5 uS/cm...100 mS/cm).
+Values outside them are logged at debug level, so set `log_level` to `debug` when
+diagnosing a station that reports missing readings.
+
 
 ### config.analog[]
 
