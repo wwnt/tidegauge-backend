@@ -23,7 +23,9 @@ func CheckFtpConfig(ftp global.Ftp) (bool, error) {
 	return true, nil
 }
 
-func scheduleRemoveOutdatedData() {
+// scheduleRemoveOutdatedData 装订磁盘与数据库的保留期清理：启动即跑一次，之后每日一次。
+// dataItemNames 是本站全部数据项（即 SQLite 数据表名）。
+func scheduleRemoveOutdatedData(dataItemNames []string) {
 	var ftps = []global.Ftp{global.Config.Cameras.Ftp, global.Config.Gnss.Ftp}
 	var validFtps []global.Ftp
 	for _, ftp := range ftps {
@@ -52,7 +54,9 @@ func scheduleRemoveOutdatedData() {
 				os.Exit(1)
 			}
 		}
-		db.CleanDBData(time.Now().Add(-global.Config.Db.HoldDays * 24 * time.Hour).UnixMilli())
+		if err := db.CleanDBData(time.Now().Add(-global.Config.Db.HoldDays*24*time.Hour).UnixMilli(), dataItemNames); err != nil {
+			slog.Error("Failed to clean outdated database data", "error", err)
+		}
 	}
 	removeOutdatedDataJob()
 	if _, err := global.CronJob.AddFunc("@daily", removeOutdatedDataJob); err != nil {

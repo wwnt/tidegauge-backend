@@ -45,9 +45,9 @@ func Init() {
 	project.RegisterReleaseFunc(db.Close)
 	stationInfo.Identifier = global.Config.Identifier
 
-	scheduleRemoveOutdatedData()
+	itemNames := addDevices()
+	scheduleRemoveOutdatedData(itemNames)
 
-	addDevices()
 	go receiveData(dataBroker)
 
 	addRpiStatus(dataBroker)
@@ -68,7 +68,9 @@ func Init() {
 
 var itemsStatus = make(map[string]common.StatusChangeStruct)
 
-func addDevices() {
+// addDevices 按配置装载全部设备，并为每个 item 建表。返回本站全部 item 名——
+// 它们同时是 SQLite 里的数据表名，磁盘清理按这份清单执行。
+func addDevices() []string {
 	var info = stationInfo.Devices
 	for connType, files := range global.Config.Devices {
 		newConnFunc := GetRegConn(connType).(func(json.RawMessage) common.StringMapMap)
@@ -82,7 +84,9 @@ func addDevices() {
 			device.MergeInfo(info, subInfo)
 		}
 	}
+
 	// check duplicate
+	var itemNames []string
 	var tmp = make(map[string]struct{})
 	for deviceName, items := range info {
 		for typ, name := range items {
@@ -100,6 +104,7 @@ func addDevices() {
 				slog.Error("Failed to create table", "item_name", name, "error", err)
 				os.Exit(1)
 			}
+			itemNames = append(itemNames, name)
 		}
 	}
 	ds, err := db.GetItemsLatestStatus()
@@ -110,6 +115,7 @@ func addDevices() {
 	for _, itemStatus := range ds {
 		itemsStatus[itemStatus.ItemName] = itemStatus.StatusChangeStruct
 	}
+	return itemNames
 }
 
 func receiveData(dataBroker *pubsub.Broker) {

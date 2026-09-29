@@ -127,3 +127,81 @@ func TestSaveData(t *testing.T) {
 		})
 	}
 }
+
+func TestCleanItemStatusLog(t *testing.T) {
+	InitData(t)
+
+	// cutoff 早于所有行时不得误删。
+	if err := CleanDBData(0, []string{"item1", "item2"}); err != nil {
+		t.Fatalf("CleanDBData returned error: %v", err)
+	}
+	logs, err := GetItemStatusLogAfter(0)
+	if err != nil {
+		t.Fatalf("GetItemStatusLogAfter returned error: %v", err)
+	}
+	assert.Equal(t, StatusLogs, logs, "a cutoff before every row must delete nothing")
+
+	// cutoff 晚于所有行时全删（数据表与状态日志都在清理范围内）。
+	if err = CleanDBData(2000, []string{"item1", "item2"}); err != nil {
+		t.Fatalf("CleanDBData returned error: %v", err)
+	}
+	logs, err = GetItemStatusLogAfter(0)
+	if err != nil {
+		t.Fatalf("GetItemStatusLogAfter returned error: %v", err)
+	}
+	assert.Empty(t, logs, "a cutoff after every row must delete everything")
+
+	// 重新播种：cutoff 取两行之间应删旧留新。
+	InitData(t)
+	if err = CleanDBData(1150, []string{"item1", "item2"}); err != nil {
+		t.Fatalf("CleanDBData returned error: %v", err)
+	}
+	logs, err = GetItemStatusLogAfter(0)
+	if err != nil {
+		t.Fatalf("GetItemStatusLogAfter returned error: %v", err)
+	}
+	assert.Equal(t, StatusLogs[1:], logs, "expected only the rows newer than the cutoff")
+
+	// 数据表同样被清理：cutoff 2000 应清空 item1（种子 200ms 那行在 2000 之后）。
+	his, err := GetDataHistory("item1", 0, 0)
+	if err != nil {
+		t.Fatalf("GetDataHistory returned error: %v", err)
+	}
+	assert.Empty(t, his, "data table rows older than the cutoff must be deleted")
+}
+
+func TestCleanDBDataRejectsIllegalItemName(t *testing.T) {
+	t.Parallel()
+
+	if err := CleanDBData(0, []string{"item1\"; drop table item1"}); err == nil {
+		t.Fatal("CleanDBData accepted an item name with SQL metacharacters")
+	}
+}
+
+// TestCleanDBDataCleansOrphanTables 覆盖设备/item 改名或移除后的场景：遗留的旧数据表
+// 不在配置清单里，也必须按保留期清理，否则 data.db 只增不减。
+func TestCleanDBDataCleansOrphanTables(t *testing.T) {
+	InitData(t)
+
+	// 造一张孤儿表：结构是数据表，但不在本次配置清单里。
+	const orphan = "item_orphan_old_name"
+	MakeSureTableExist(orphan)
+	if err := SaveData(orphan, 1, 100); err != nil {
+		t.Fatalf("seed orphan table: %v", err)
+	}
+	if err := SaveData(orphan, 2, 5000); err != nil {
+		t.Fatalf("seed orphan table: %v", err)
+	}
+
+	// 清理清单只含 item1/item2（模拟设备变更后的新配置），孤儿表也应被清理。
+	if err := CleanDBData(1000, []string{"item1", "item2"}); err != nil {
+		t.Fatalf("CleanDBData returned error: %v", err)
+	}
+
+	his, err := GetDataHistory(orphan, 0, 0)
+	if err != nil {
+		t.Fatalf("GetDataHistory(orphan) returned error: %v", err)
+	}
+	assert.Equal(t, []common.DataTimeStruct{{Value: 2, Millisecond: 5000}}, his,
+		"only the rows newer than the cutoff must survive in the orphan table")
+}

@@ -1,6 +1,8 @@
 .idea
 .claude
 .vscode
+.playwright
+.notes
 
 # Binaries for programs and plugins
 *.exe
