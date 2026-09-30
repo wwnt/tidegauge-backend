@@ -37,6 +37,10 @@ func scheduleRemoveOutdatedData(dataItemNames []string) {
 			validFtps = append(validFtps, ftp)
 		}
 	}
+	// data.db 所在盘也在监控范围内：时序数据与状态日志是主要的磁盘增长源，
+	// 而纯数据站（未配置 cameras/gnss）原本没有任何磁盘余量检查。
+	dbDir, dbDirOk := db.PathFromDSN(global.Config.Db.Dsn)
+
 	removeOutdatedDataJob := func() {
 		for _, ftp := range validFtps {
 			cleanDir(ftp.Path, 1, 0, time.Now().Add(-ftp.HoldDays*24*time.Hour))
@@ -49,6 +53,18 @@ func scheduleRemoveOutdatedData(dataItemNames []string) {
 			} else if avail < minDiskThreshold {
 				slog.Error("Insufficient disk space",
 					"path", ftp.Path,
+					"available_mb", avail/(1024*1024),
+					"threshold_mb", minDiskThreshold/(1024*1024))
+				os.Exit(1)
+			}
+		}
+		if dbDirOk {
+			if avail, err := CheckDiskSpace(dbDir); err != nil {
+				slog.Error("Failed to check disk space", "path", dbDir, "error", err)
+				os.Exit(1)
+			} else if avail < minDiskThreshold {
+				slog.Error("Insufficient disk space",
+					"path", dbDir,
 					"available_mb", avail/(1024*1024),
 					"threshold_mb", minDiskThreshold/(1024*1024))
 				os.Exit(1)

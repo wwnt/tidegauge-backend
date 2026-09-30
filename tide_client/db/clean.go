@@ -3,7 +3,9 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"slices"
+	"strings"
 	"tide/common"
 )
 
@@ -12,6 +14,24 @@ var dataItemColumns = []string{"timestamp", "value"}
 
 // statusLogTable 是状态日志表：列结构与数据表不同，由 CleanItemStatusLog 单独清理。
 const statusLogTable = "item_status_log"
+
+// PathFromDSN 从 SQLite DSN 中提取数据库文件所在目录。
+// 兼容 "file:data.db?params"、"file:/abs/path/data.db" 与裸 "data.db" 形式；
+// 内存库（:memory:）或无法确定目录时返回 ok=false。
+func PathFromDSN(dsn string) (dir string, ok bool) {
+	path := strings.TrimPrefix(dsn, "file:")
+	if i := strings.IndexByte(path, '?'); i >= 0 {
+		path = path[:i]
+	}
+	if path == "" || path == ":memory:" {
+		return "", false
+	}
+	dir = filepath.Dir(path)
+	if dir == "." || dir == string(filepath.Separator) {
+		return "", false
+	}
+	return dir, true
+}
 
 // CleanDBData 删除超过保留期的时序数据与状态日志。
 //

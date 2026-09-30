@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"path/filepath"
 	"testing"
 	"tide/common"
 )
@@ -175,6 +176,40 @@ func TestCleanDBDataRejectsIllegalItemName(t *testing.T) {
 
 	if err := CleanDBData(0, []string{"item1\"; drop table item1"}); err == nil {
 		t.Fatal("CleanDBData accepted an item name with SQL metacharacters")
+	}
+}
+
+func TestPathFromDSN(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		dsn    string
+		want   string
+		wantOK bool
+	}{
+		{name: "fileWithParams", dsn: "file:data.db?_journal_mode=WAL&_foreign_keys=on", want: ".", wantOK: false},
+		{name: "fileNoParams", dsn: "file:data.db", want: ".", wantOK: false},
+		{name: "bareName", dsn: "data.db", want: ".", wantOK: false},
+		{name: "memory", dsn: "file::memory:", want: "", wantOK: false},
+		{name: "subDir", dsn: "file:tide/data.db", want: "tide", wantOK: true},
+		{name: "absPath", dsn: `file:/home/pi/tide/data.db?_journal_mode=WAL`, want: `/home/pi/tide`, wantOK: true},
+		{name: "windowsPath", dsn: `file:C:/tide/data.db`, want: `C:/tide`, wantOK: true},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			dir, ok := PathFromDSN(tt.dsn)
+			if ok != tt.wantOK {
+				t.Fatalf("PathFromDSN(%q) ok = %v, want %v", tt.dsn, ok, tt.wantOK)
+			}
+			// Windows 上 filepath.Dir 返回反斜杠分隔；断言按平台归一化。
+			if ok && dir != filepath.FromSlash(tt.want) {
+				t.Fatalf("PathFromDSN(%q) dir = %q, want %q", tt.dsn, dir, filepath.FromSlash(tt.want))
+			}
+		})
 	}
 }
 
