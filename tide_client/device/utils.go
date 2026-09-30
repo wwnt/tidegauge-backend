@@ -20,6 +20,11 @@ func getStringInBetween(str string, start string, end string) (result string) {
 	return newStr[:e]
 }
 
+// MergeInfo 把设备的 item 信息合并进站点信息表，校验失败直接终止进程。
+//
+// 注意：本函数与 AddCronJob/AddCronJobWithOneItem 一样是**启动期** API——所有调用点
+// 都在 controller.addDevices 装配设备的过程中。若未来需要支持"运行期改配置不重启"，
+// 这些函数要先改为返回 error，当前调用即退出（fail-fast）的语义不适用于运行期。
 func MergeInfo(dstInfo map[string]map[string]string, srcInfo map[string]map[string]string) {
 	if len(srcInfo) == 0 {
 		slog.Error("srcInfo length is 0")

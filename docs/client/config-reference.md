@@ -94,8 +94,17 @@ devices or filesystems that do not reliably flush writes to persistent media.
 
 ### db.hold_days
 
-The number of days to keep time-series data in the local SQLite database.
+The number of days (integer) to keep time-series data in the local SQLite database.
 The sample configuration defaults to `90`, which is about 3 months.
+
+Cleanup runs at startup and daily, deleting expired time-series rows and status logs,
+including rows in data tables left behind by renamed or removed items. SQLite can
+reuse space freed by deletions for later inserts, so deleting rows does not
+necessarily shrink the database file.
+
+The client does not change the database's `auto_vacuum` setting or execute `VACUUM`
+or `incremental_vacuum`. Existing databases retain their configured mode. If file
+compaction is needed, run the appropriate SQLite commands manually during maintenance.
 
 ## cameras
 
@@ -111,7 +120,7 @@ The path of the ftp server, the camera will upload the image to this path.
 
 #### cameras.ftp.hold_days
 
-The number of days to keep the image on the ftp server.
+The number of days (integer) to keep the image on the ftp server.
 
 ### cameras.list
 

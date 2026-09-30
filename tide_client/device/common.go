@@ -102,6 +102,8 @@ func nowMs() custype.UnixMs {
 	return custype.ToUnixMs(time.Now())
 }
 
+// AddCronJob / AddCronJobWithOneItem 是启动期 API（见 MergeInfo 的说明）：
+// 在设备装配阶段装订 cron 任务，配置非法直接退出进程；运行期不要调用。
 func AddCronJob(cron string, items map[string]string, provideItems map[string]int, job func() map[string]*float64) {
 	verifyItems(items, provideItems)
 	var (

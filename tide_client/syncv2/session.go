@@ -93,20 +93,24 @@ func (c *Client) runOnConn(ctx context.Context, conn net.Conn) error {
 	}
 
 	subscriber := pubsub.NewSubscriber(10000, func() { _ = session.Close() })
+	// replay + subscribe 在同一临界区内完成（订阅先于实时推送，与落库无缝衔接）；
+	// 闭包内 defer Unlock，让每个错误分支都不必手动解锁。
 	c.deps.IngestLock.Lock()
-	err = c.sendReplayData(ctx, stream, info, itemsLatest)
-	if err != nil {
-		c.deps.IngestLock.Unlock()
+	subscribed := func() error {
+		defer c.deps.IngestLock.Unlock()
+		if err := c.sendReplayData(ctx, stream, info, itemsLatest); err != nil {
+			return err
+		}
+		if err := c.sendReplayStatus(ctx, stream, latestStatusLogRowID); err != nil {
+			return err
+		}
+		c.deps.Subscribe(subscriber, nil)
+		return nil
+	}()
+	if err := subscribed; err != nil {
 		return err
 	}
-	err = c.sendReplayStatus(ctx, stream, latestStatusLogRowID)
-	if err != nil {
-		c.deps.IngestLock.Unlock()
-		return err
-	}
-	c.deps.Subscribe(subscriber, nil)
 	defer c.deps.Unsubscribe(subscriber)
-	c.deps.IngestLock.Unlock()
 
 	recvErrCh := make(chan error, 1)
 	go func() {

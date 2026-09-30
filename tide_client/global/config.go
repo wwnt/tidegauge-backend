@@ -12,8 +12,10 @@ import (
 )
 
 type Ftp struct {
-	Path     string        `json:"path"`
-	HoldDays time.Duration `json:"hold_days"`
+	Path string `json:"path"`
+	// HoldDays 是保留天数（JSON 里写整数天数，如 3）。使用处换算为
+	// time.Duration(HoldDays) * 24 * time.Hour。
+	HoldDays int `json:"hold_days"`
 }
 
 var Config struct {
@@ -27,8 +29,8 @@ var Config struct {
 	Identifier string              `json:"identifier"`
 	Devices    map[string][]string `json:"devices"`
 	Db         struct {
-		Dsn      string        `json:"dsn"`
-		HoldDays time.Duration `json:"hold_days"`
+		Dsn      string `json:"dsn"`
+		HoldDays int    `json:"hold_days"` // 保留天数；换算方式同 Ftp.HoldDays
 	} `json:"db"`
 	Gnss struct {
 		Ftp Ftp `json:"ftp"`

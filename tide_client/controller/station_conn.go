@@ -24,7 +24,7 @@ var stationInfo = common.StationInfoStruct{
 var onvifSnapshot = camera.OnvifSnapshot
 
 func client(dataBroker *pubsub.Broker) {
-	conn, err := net.Dial("tcp", global.Config.Server)
+	conn, err := net.DialTimeout("tcp", global.Config.Server, 30*time.Second)
 	if err != nil {
 		return
 	}
@@ -75,8 +75,11 @@ func stationConn(conn net.Conn, dataBroker *pubsub.Broker) {
 	}
 	// lock database operation
 	ingestMu.Lock()
-
-	{
+	var subscriber *pubsub.Subscriber
+	// replay + subscribe 在同一个临界区内完成，保证订阅先于实时数据写入、与落库
+	// 无缝衔接；闭包内 defer Unlock，让每个错误分支都不必手动解锁。
+	subscribed := func() bool {
+		defer ingestMu.Unlock()
 		var missData = make(map[string][]common.DataTimeStruct)
 		for _, dv := range stationInfo.Devices {
 			for _, itemName := range dv {
@@ -85,8 +88,7 @@ func stationConn(conn net.Conn, dataBroker *pubsub.Broker) {
 				ds, err := db.GetDataHistory(itemName, start.ToInt64(), 0)
 				if err != nil {
 					slog.Error("Failed to get data history", "item_name", itemName, "error", err)
-					ingestMu.Unlock()
-					return
+					return false
 				}
 				if len(ds) > 0 {
 					missData[itemName] = ds
@@ -94,36 +96,38 @@ func stationConn(conn net.Conn, dataBroker *pubsub.Broker) {
 			}
 		}
 		// send missData
-		if err = encoder.Encode(missData); err != nil {
+		// v1 协议约定重放是单帧 map（server 端 ReadMissData 只 Decode 一次），
+		// 大积压时这一帧可能达数 MB；v2 已按 128 条分批。v1 处于淘汰路径，
+		// 不再扩展协议，内存峰值是该版本的已知限制。
+		if err := encoder.Encode(missData); err != nil {
 			slog.Error("Failed to send missing data", "error", err)
-			ingestMu.Unlock()
-			return
+			return false
 		}
 
 		missStatusLogs, err := db.GetItemStatusLogAfter(latestStatusLogRowId)
 		if err != nil {
 			slog.Error("Failed to get missing status logs", "after_row_id", latestStatusLogRowId, "error", err)
-			ingestMu.Unlock()
-			return
+			return false
 		}
 		// send missStatusLogs
-		if err = encoder.Encode(missStatusLogs); err != nil {
+		if err := encoder.Encode(missStatusLogs); err != nil {
 			slog.Error("Failed to send missing status logs", "error", err)
-			ingestMu.Unlock()
-			return
+			return false
 		}
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-session.CloseChan()
-		cancel()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			<-session.CloseChan()
+			cancel()
+		}()
+		subscriber = newSubscriber(ctx, func() { _ = session.Close() }, jsonWriter(stream1))
+		dataBroker.Subscribe(subscriber, nil)
+		return true
 	}()
-	subscriber := newSubscriber(ctx, func() { _ = session.Close() }, jsonWriter(stream1))
-
-	dataBroker.Subscribe(subscriber, nil)
+	if !subscribed {
+		return
+	}
 	defer dataBroker.Unsubscribe(subscriber)
-
-	ingestMu.Unlock()
 
 	go func() {
 		defer func() { _ = session.Close() }()

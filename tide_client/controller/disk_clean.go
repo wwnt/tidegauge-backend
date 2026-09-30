@@ -43,7 +43,7 @@ func scheduleRemoveOutdatedData(dataItemNames []string) {
 
 	removeOutdatedDataJob := func() {
 		for _, ftp := range validFtps {
-			cleanDir(ftp.Path, 1, 0, time.Now().Add(-ftp.HoldDays*24*time.Hour))
+			cleanDir(ftp.Path, 1, 0, time.Now().Add(-time.Duration(ftp.HoldDays)*24*time.Hour))
 		}
 		// Check free disk space
 		for _, ftp := range validFtps {
@@ -70,7 +70,7 @@ func scheduleRemoveOutdatedData(dataItemNames []string) {
 				os.Exit(1)
 			}
 		}
-		if err := db.CleanDBData(time.Now().Add(-global.Config.Db.HoldDays*24*time.Hour).UnixMilli(), dataItemNames); err != nil {
+		if err := db.CleanDBData(time.Now().Add(-time.Duration(global.Config.Db.HoldDays)*24*time.Hour).UnixMilli(), dataItemNames); err != nil {
 			slog.Error("Failed to clean outdated database data", "error", err)
 		}
 	}
