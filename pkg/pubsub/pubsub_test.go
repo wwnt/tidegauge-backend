@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -63,6 +64,78 @@ func TestPubSub_Subscribe(t *testing.T) {
 	p.Subscribe(subscriber, TopicSet{"1": struct{}{}})
 	_, ok := p.subscriptions.Load(subscriber)
 	assert.True(t, ok)
+}
+
+func TestDelayedBroker_DeliversInOrderAfterDelay(t *testing.T) {
+	const delay = 30 * time.Millisecond
+	broker := NewBroker()
+	subscriber := NewSubscriber(10, nil)
+	broker.Subscribe(subscriber, nil)
+	delayed := NewDelayedBroker(broker, delay)
+
+	start := time.Now()
+	for i := 0; i < 3; i++ {
+		delayed.Publish(i, nil)
+	}
+	for i := 0; i < 3; i++ {
+		select {
+		case got := <-subscriber.Ch:
+			assert.Equal(t, i, got)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("message %d was not delivered", i)
+		}
+	}
+	assert.GreaterOrEqual(t, time.Since(start), delay)
+}
+
+func TestDelayedBroker_ZeroDelayPublishesImmediately(t *testing.T) {
+	broker := NewBroker()
+	subscriber := NewSubscriber(1, nil)
+	broker.Subscribe(subscriber, nil)
+
+	NewDelayedBroker(broker, 0).Publish("now", nil)
+
+	assert.Equal(t, "now", <-subscriber.Ch)
+}
+
+// 发布间隔约等于延迟时，队列会反复被取空；旧实现在"取空后、重新等待前"收到新消息会
+// 与发布方互相等待而永久卡死。
+func TestDelayedBroker_PublishWhileQueueDrainsDoesNotDeadlock(t *testing.T) {
+	const (
+		delay = time.Millisecond
+		total = 2000
+	)
+	broker := NewBroker()
+	subscriber := NewSubscriber(total, nil)
+	broker.Subscribe(subscriber, nil)
+	delayed := NewDelayedBroker(broker, delay)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < total; i++ {
+			delayed.Publish(i, nil)
+			if i%2 == 0 {
+				time.Sleep(delay)
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("Publish blocked: delayed broker deadlocked")
+	}
+	for i := 0; i < total; i++ {
+		select {
+		case got := <-subscriber.Ch:
+			if got != i {
+				t.Fatalf("message %d delivered out of order: got %v", i, got)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("message %d was never delivered", i)
+		}
+	}
 }
 
 func TestPubSub_PublishOverflowTriggersHandler(t *testing.T) {

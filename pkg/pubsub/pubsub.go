@@ -106,7 +106,8 @@ type DelayedBroker struct {
 func NewDelayedBroker(broker *Broker, delay time.Duration) *DelayedBroker {
 	delayedBroker := &DelayedBroker{
 		broker: broker,
-		wakeCh: make(chan struct{}),
+		// 容量为 1：唤醒信号只表示"队列可能非空"，积压一个就够，发送方永不阻塞。
+		wakeCh: make(chan struct{}, 1),
 		delay:  delay,
 	}
 	go delayedBroker.dispatchLoop()
@@ -114,49 +115,53 @@ func NewDelayedBroker(broker *Broker, delay time.Duration) *DelayedBroker {
 }
 
 func (db *DelayedBroker) Publish(message any, topic any) {
-	if db.delay == 0 {
+	if db.delay <= 0 {
 		db.broker.Publish(message, topic)
 		return
 	}
 	db.mu.Lock()
-	defer db.mu.Unlock()
-	if len(db.scheduledQueue) == 0 {
-		db.wakeCh <- struct{}{}
-	}
+	wasEmpty := len(db.scheduledQueue) == 0
 	db.scheduledQueue = append(db.scheduledQueue, scheduledMessage{
 		topic:     topic,
 		message:   message,
 		publishAt: time.Now().Add(db.delay),
 	})
+	db.mu.Unlock()
+
+	if wasEmpty {
+		// 必须在释放 mu 之后、且以非阻塞方式唤醒：dispatchLoop 取走队首后要重新拿 mu，
+		// 若这里持锁阻塞在发送上，两边会互相等待（旧实现的死锁）。
+		select {
+		case db.wakeCh <- struct{}{}:
+		default:
+		}
+	}
 }
 
+// dispatchLoop 按入队顺序在各自的 publishAt 时刻转发消息。所有消息的延迟相同且按时间
+// 顺序入队，所以队首的到期时间不会因为后续入队而提前，等待队首期间无需被唤醒。
 func (db *DelayedBroker) dispatchLoop() {
-	timer := time.NewTimer(100000 * time.Hour)
 	for {
 		db.mu.Lock()
 		if len(db.scheduledQueue) == 0 {
 			db.mu.Unlock()
-			timer.Reset(100000 * time.Hour)
-		} else {
-			timer.Reset(db.scheduledQueue[0].publishAt.Sub(time.Now()))
-			db.mu.Unlock()
+			// 可能读到一个过期的唤醒信号（队列已被取空），回到循环顶部重新检查即可。
+			<-db.wakeCh
+			continue
+		}
+		next := db.scheduledQueue[0]
+		db.mu.Unlock()
+
+		if wait := time.Until(next.publishAt); wait > 0 {
+			time.Sleep(wait)
 		}
 
-		select {
-		case <-timer.C:
-			db.mu.Lock()
-			if len(db.scheduledQueue) == 0 {
-				db.mu.Unlock()
-				continue
-			}
-			nextMessage := db.scheduledQueue[0]
-			db.scheduledQueue = db.scheduledQueue[1:]
-			db.mu.Unlock()
-			db.broker.Publish(nextMessage.message, nextMessage.topic)
-		case <-db.wakeCh:
-			if !timer.Stop() {
-				<-timer.C
-			}
-		}
+		db.mu.Lock()
+		// 只有本 goroutine 会出队，队首仍是 next。清零后再切片，避免底层数组继续引用消息。
+		db.scheduledQueue[0] = scheduledMessage{}
+		db.scheduledQueue = db.scheduledQueue[1:]
+		db.mu.Unlock()
+
+		db.broker.Publish(next.message, next.topic)
 	}
 }

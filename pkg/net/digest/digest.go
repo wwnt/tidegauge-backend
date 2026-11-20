@@ -55,11 +55,16 @@ func (t *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 		return nil, ErrNilTransport
 	}
 
-	body, err := r.GetBody()
-	if err != nil {
-		return nil, err
+	// GetBody 只在请求带可重放的 body 时才有；普通 GET 为 nil，不能无条件调用。
+	var body io.ReadCloser
+	if r.GetBody != nil {
+		var err error
+		if body, err = r.GetBody(); err != nil {
+			return nil, err
+		}
 	}
-	req, err := http.NewRequest(r.Method, r.URL.String(), body)
+	// 重试请求沿用原请求的 context，调用方设置的超时/取消对第二次请求同样生效。
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, r.URL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -104,41 +109,91 @@ type challenge struct {
 	qop       string
 }
 
+// parseChallenge 解析 WWW-Authenticate 的 Digest 质询。
+//
+// 指令按"引号外的逗号"切分（qop="auth,auth-int" 这类带逗号的引号值不能被拆开）；
+// 没有 '=' 的指令视为格式错误返回 ErrBadChallenge，而不是越界 panic；
+// 不认识的指令（RFC 7616 的 charset/userhash 等扩展）直接忽略。
 func parseChallenge(input string) (*challenge, error) {
 	const ws = " \n\r\t"
-	const qs = `"`
+	const scheme = "Digest "
 	s := strings.Trim(input, ws)
-	if !strings.HasPrefix(s, "Digest ") {
+	if len(s) < len(scheme) || !strings.EqualFold(s[:len(scheme)], scheme) {
 		return nil, ErrBadChallenge
 	}
-	s = strings.Trim(s[7:], ws)
-	sl := strings.Split(s, ",")
 	c := &challenge{
 		algorithm: "MD5",
 	}
-	var r []string
-	for i := range sl {
-		r = strings.SplitN(strings.Trim(sl[i], ws), "=", 2)
-		switch r[0] {
-		case "realm":
-			c.realm = strings.Trim(r[1], qs)
-		case "domain":
-			c.domain = strings.Trim(r[1], qs)
-		case "nonce":
-			c.nonce = strings.Trim(r[1], qs)
-		case "opaque":
-			c.opaque = strings.Trim(r[1], qs)
-		case "stale":
-			c.stale = strings.Trim(r[1], qs)
-		case "algorithm":
-			c.algorithm = strings.Trim(r[1], qs)
-		case "qop":
-			c.qop = strings.Trim(r[1], qs)
-		default:
+	for _, directive := range splitDirectives(s[len(scheme):]) {
+		key, value, ok := strings.Cut(directive, "=")
+		if !ok {
 			return nil, ErrBadChallenge
 		}
+		key = strings.ToLower(strings.Trim(key, ws))
+		value = strings.Trim(strings.Trim(value, ws), `"`)
+		switch key {
+		case "realm":
+			c.realm = value
+		case "domain":
+			c.domain = value
+		case "nonce":
+			c.nonce = value
+		case "opaque":
+			c.opaque = value
+		case "stale":
+			c.stale = value
+		case "algorithm":
+			c.algorithm = strings.ToUpper(value)
+		case "qop":
+			c.qop = selectQop(value)
+		}
+	}
+	if c.nonce == "" {
+		return nil, ErrBadChallenge
 	}
 	return c, nil
+}
+
+// splitDirectives 按引号外的逗号切分指令列表，丢弃空段。
+func splitDirectives(s string) []string {
+	var (
+		parts    []string
+		inQuotes bool
+		start    int
+	)
+	appendPart := func(part string) {
+		if strings.TrimSpace(part) != "" {
+			parts = append(parts, part)
+		}
+	}
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			if inQuotes {
+				i++ // 引号内的转义字符，跳过下一个字节
+			}
+		case '"':
+			inQuotes = !inQuotes
+		case ',':
+			if !inQuotes {
+				appendPart(s[start:i])
+				start = i + 1
+			}
+		}
+	}
+	appendPart(s[start:])
+	return parts
+}
+
+// selectQop 从服务端给出的 qop 选项列表里选出本实现支持的 "auth"；
+// 列表里没有 "auth" 时原样返回，由 authorize 报 ErrAlgNotImplemented。
+func selectQop(options string) string {
+	for _, option := range strings.Split(options, ",") {
+		if strings.EqualFold(strings.TrimSpace(option), "auth") {
+			return "auth"
+		}
+	}
+	return strings.TrimSpace(options)
 }
 
 type credentials struct {
