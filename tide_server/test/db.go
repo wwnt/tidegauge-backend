@@ -80,24 +80,11 @@ func createAndInitDatabase(dbName string) error {
 }
 
 func openAdminDB() (*sql.DB, error) {
-	return sql.Open("pgx", fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=postgres sslmode=disable",
-		global.Config.Db.Tide.Host,
-		global.Config.Db.Tide.Port,
-		global.Config.Db.Tide.User,
-		global.Config.Db.Tide.Password,
-	))
+	return sql.Open("pgx", global.Config.Db.Tide.DSN("postgres"))
 }
 
 func openTideDB(dbName string) (*sql.DB, error) {
-	return sql.Open("pgx", fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		global.Config.Db.Tide.Host,
-		global.Config.Db.Tide.Port,
-		global.Config.Db.Tide.User,
-		global.Config.Db.Tide.Password,
-		dbName,
-	))
+	return sql.Open("pgx", global.Config.Db.Tide.DSN(dbName))
 }
 
 func uniqueTestDBName(baseName string) (string, error) {

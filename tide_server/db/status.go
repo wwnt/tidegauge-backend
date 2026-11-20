@@ -78,7 +78,7 @@ func GetItemStatusLogChangedAt(stationId uuid.UUID, rowId int64) (time.Time, boo
 
 // PruneItemStatusLogAndRecomputeItems 删除 item_status_log 中受影响的行（all=true 删全部该站点；
 // 否则删 row_id > rowId 的尾巴），并重算受影响 items 的 status / status_changed_at。
-// 重算用与 db.SyncItem 一致的 latestStatus CTE，无日志兜底为 ('', 'epoch')。
+// 重算用与 db.SyncItem 一致的 latestStatus CTE，无日志时兜底为空状态和 epoch 时间。
 func PruneItemStatusLogAndRecomputeItems(stationId uuid.UUID, rowId int64, all bool) (int64, error) {
 	tx, err := TideDB.Begin()
 	if err != nil {

@@ -169,7 +169,7 @@ func (h *SyncHub) BroadcastAvailableChange(availableItemsByStation map[uuid.UUID
 			continue
 		}
 		var allowedTopics pubsub.TopicSet
-		if user.Role == auth.NormalUser {
+		if user.Role < auth.Admin {
 			userPermissions, err := h.permissionLoader.GetPermissions(username)
 			if err != nil {
 				slog.Error("Failed to get permissions for available change", "error", err)

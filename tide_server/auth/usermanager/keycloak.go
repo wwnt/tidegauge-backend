@@ -9,18 +9,40 @@ import (
 	"net/url"
 	"strings"
 	"tide/tide_server/auth"
+	"time"
 
 	"github.com/Nerzal/gocloak/v13"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Keycloak struct {
-	token                          *gocloak.JWT
 	db                             *sql.DB
 	client                         *gocloak.GoCloak
 	basePath                       string
 	masterUsername, masterPassword string
 	realm, clientId, clientSecret  string
+	// httpClient 用于令牌自省。必须带超时：每个需要登录的请求都会走一次自省，
+	// Keycloak 挂起时不能把所有接口一起拖住。
+	httpClient *http.Client
+}
+
+// keycloakHTTPTimeout 是访问 Keycloak（令牌自省）的超时。
+const keycloakHTTPTimeout = 15 * time.Second
+
+// adminLogin 以 master realm 管理员身份登录并返回访问令牌。
+//
+// 令牌只作为返回值在一次调用内使用，不保存在结构体上：用户管理接口会并发调用
+// （/applyAccount 甚至不需要登录），共享字段既有数据竞争，登录失败时还会被置成 nil，
+// 让另一个正在进行中的请求空指针崩溃。
+func (k *Keycloak) adminLogin(ctx context.Context) (string, error) {
+	token, err := k.client.LoginAdmin(ctx, k.masterUsername, k.masterPassword, "master")
+	if err != nil {
+		return "", err
+	}
+	if token == nil || token.AccessToken == "" {
+		return "", errors.New("keycloak admin login returned no access token")
+	}
+	return token.AccessToken, nil
 }
 
 func (k *Keycloak) CheckUserPwd(username, password string) bool {
@@ -70,7 +92,7 @@ func (k *Keycloak) GetLoginUser(r *http.Request) (string, error) {
 	values.Set("token", token)
 	values.Set("client_id", k.clientId)
 	values.Set("client_secret", k.clientSecret)
-	resp, err := http.PostForm(k.basePath+"/realms/"+k.realm+"/protocol/openid-connect/token/introspect", values)
+	resp, err := k.httpClient.PostForm(k.basePath+"/realms/"+k.realm+"/protocol/openid-connect/token/introspect", values)
 	if err != nil {
 		return "", err
 	}
@@ -91,8 +113,8 @@ func (k *Keycloak) GetLoginUser(r *http.Request) (string, error) {
 func (k *Keycloak) ListUsers(condition int, role int) (users []auth.User, err error) {
 	return listUsersFromDB(k.db, condition, role)
 }
-func (k *Keycloak) getKcUserByUsername(ctx context.Context, username string) (gocloak.User, error) {
-	kcUsers, err := k.client.GetUsers(ctx, k.token.AccessToken, k.realm, gocloak.GetUsersParams{Username: &username, Exact: new(true)})
+func (k *Keycloak) getKcUserByUsername(ctx context.Context, adminToken, username string) (gocloak.User, error) {
+	kcUsers, err := k.client.GetUsers(ctx, adminToken, k.realm, gocloak.GetUsersParams{Username: &username, Exact: new(true)})
 	if err != nil {
 		return gocloak.User{}, err
 	}
@@ -131,7 +153,7 @@ func (k *Keycloak) AddUser(user auth.User) error {
 	}
 
 	ctx := context.Background()
-	k.token, err = k.client.LoginAdmin(ctx, k.masterUsername, k.masterPassword, "master")
+	adminToken, err := k.adminLogin(ctx)
 	if err != nil {
 		return err
 	}
@@ -145,24 +167,24 @@ func (k *Keycloak) AddUser(user auth.User) error {
 		Enabled:  &enable,
 	}
 
-	userUUID, err := k.client.CreateUser(ctx, k.token.AccessToken, k.realm, kcUser)
+	userUUID, err := k.client.CreateUser(ctx, adminToken, k.realm, kcUser)
 	if err != nil {
 		if apiErr, ok := errors.AsType[*gocloak.APIError](err); !ok || apiErr.Code != http.StatusConflict { // User exists with same username
 			return err
 		}
-		if kcUser, err = k.getKcUserByUsername(ctx, user.Username); err != nil {
+		if kcUser, err = k.getKcUserByUsername(ctx, adminToken, user.Username); err != nil {
 			return err
 		}
 		userUUID = *kcUser.ID
 		// If there is already a user with the same name, then update
 		if *kcUser.Enabled != enable {
 			*kcUser.Enabled = enable
-			if err = k.client.UpdateUser(ctx, k.token.AccessToken, k.realm, kcUser); err != nil {
+			if err = k.client.UpdateUser(ctx, adminToken, k.realm, kcUser); err != nil {
 				return err
 			}
 		}
 	}
-	if err = k.client.SetPassword(ctx, k.token.AccessToken, userUUID, k.realm, user.Password, false); err != nil {
+	if err = k.client.SetPassword(ctx, adminToken, userUUID, k.realm, user.Password, false); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -182,11 +204,11 @@ func (k *Keycloak) EditUserBaseInfo(user auth.UserBaseInfo) error {
 	// change password
 	if user.Password != "" {
 		ctx := context.Background()
-		k.token, err = k.client.LoginAdmin(ctx, k.masterUsername, k.masterPassword, "master")
+		adminToken, err := k.adminLogin(ctx)
 		if err != nil {
 			return err
 		}
-		kcUser, err := k.getKcUserByUsername(ctx, user.Username)
+		kcUser, err := k.getKcUserByUsername(ctx, adminToken, user.Username)
 		if err != nil {
 			if errors.Is(err, auth.ErrUserNotFound) { //almost never happens
 				_, _ = k.db.Exec("delete from users where username=$1", user.Username)
@@ -194,7 +216,7 @@ func (k *Keycloak) EditUserBaseInfo(user auth.UserBaseInfo) error {
 			}
 			return err
 		}
-		if err = k.client.SetPassword(ctx, k.token.AccessToken, *kcUser.ID, k.realm, user.Password, false); err != nil {
+		if err = k.client.SetPassword(ctx, adminToken, *kcUser.ID, k.realm, user.Password, false); err != nil {
 			return err
 		}
 	}
@@ -218,11 +240,11 @@ func (k *Keycloak) EditUser(user auth.User) error {
 	}
 	// change password
 	ctx := context.Background()
-	k.token, err = k.client.LoginAdmin(ctx, k.masterUsername, k.masterPassword, "master")
+	adminToken, err := k.adminLogin(ctx)
 	if err != nil {
 		return err
 	}
-	kcUser, err := k.getKcUserByUsername(ctx, user.Username)
+	kcUser, err := k.getKcUserByUsername(ctx, adminToken, user.Username)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
 			_, err = tx.Exec("delete from users where username=$1", user.Username)
@@ -240,12 +262,12 @@ func (k *Keycloak) EditUser(user auth.User) error {
 	// If this user is found, then update
 	if *kcUser.Enabled != enable {
 		*kcUser.Enabled = enable
-		if err = k.client.UpdateUser(ctx, k.token.AccessToken, k.realm, kcUser); err != nil {
+		if err = k.client.UpdateUser(ctx, adminToken, k.realm, kcUser); err != nil {
 			return err
 		}
 	}
 	if user.Password != "" {
-		if err = k.client.SetPassword(ctx, k.token.AccessToken, *kcUser.ID, k.realm, user.Password, false); err != nil {
+		if err = k.client.SetPassword(ctx, adminToken, *kcUser.ID, k.realm, user.Password, false); err != nil {
 			return err
 		}
 	}
@@ -266,18 +288,18 @@ func (k *Keycloak) DelUser(username string) (err error) {
 	}
 
 	ctx := context.Background()
-	k.token, err = k.client.LoginAdmin(ctx, k.masterUsername, k.masterPassword, "master")
+	adminToken, err := k.adminLogin(ctx)
 	if err != nil {
 		return err
 	}
-	kcUser, err := k.getKcUserByUsername(ctx, username)
+	kcUser, err := k.getKcUserByUsername(ctx, adminToken, username)
 	if err != nil {
 		if !errors.Is(err, auth.ErrUserNotFound) {
 			return err //Error finding user
 		}
 	} else {
 		//Found a user
-		err = k.client.DeleteUser(ctx, k.token.AccessToken, k.realm, *kcUser.ID)
+		err = k.client.DeleteUser(ctx, adminToken, k.realm, *kcUser.ID)
 		if err != nil {
 			if apiErr, ok := errors.AsType[*gocloak.APIError](err); !ok || apiErr.Code != http.StatusNotFound {
 				return err
@@ -297,5 +319,6 @@ func NewKeycloak(db *sql.DB, basePath, masterUsername, masterPassword, realm, cl
 		realm:          realm,
 		clientId:       clientId,
 		clientSecret:   clientSecret,
+		httpClient:     &http.Client{Timeout: keycloakHTTPTimeout},
 	}
 }

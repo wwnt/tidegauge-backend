@@ -31,14 +31,18 @@ func GetUpstreams() ([]Upstream, error) {
 	}
 	return us, err
 }
+
+// EditUpstream 新建（Id==0）或修改上游。修改时 Password 为空表示沿用已保存的密码；
+// 返回时 up.Password 是实际生效的密码，调用方可以直接用它发起同步。
 func EditUpstream(up *Upstream) (err error) {
 	if up.Id == 0 {
 		err = TideDB.QueryRow(
 			`insert into upstreams (username, password, url) values ($1,$2,$3) returning id`,
 			up.Username, up.Password, up.Url).Scan(&up.Id)
 	} else {
-		_, err = TideDB.Exec(`update upstreams set username=$1, password=$2, url=$3 where id=$4`,
-			up.Username, up.Password, up.Url, up.Id)
+		err = TideDB.QueryRow(
+			`update upstreams set username=$1, password=case when $2='' then password else $2 end, url=$3 where id=$4 returning password`,
+			up.Username, up.Password, up.Url, up.Id).Scan(&up.Password)
 	}
 	return err
 }

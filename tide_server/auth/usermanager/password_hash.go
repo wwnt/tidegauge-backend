@@ -17,13 +17,22 @@ const (
 	maxPBKDF2KeyLen     = 1024
 )
 
+// argon2Slots 限制同时进行的 argon2id 运算数。每次运算要占 64 MiB 内存并吃满 CPU，
+// 而 /login 和 /applyAccount 都不需要登录就能触发；不设上限的话，几十个并发请求
+// 就能把服务器内存耗尽。超出的请求排队等待。
+var argon2Slots = make(chan struct{}, 4)
+
 func createPasswordHash(password string) (string, error) {
+	argon2Slots <- struct{}{}
+	defer func() { <-argon2Slots }()
 	return argon2id.CreateHash(password, argon2id.DefaultParams)
 }
 
 func verifyPasswordHash(password, hash string) bool {
 	switch {
 	case strings.HasPrefix(hash, "$argon2"):
+		argon2Slots <- struct{}{}
+		defer func() { <-argon2Slots }()
 		ok, err := argon2id.ComparePasswordAndHash(password, hash)
 		return err == nil && ok
 	case strings.HasPrefix(hash, "$pbkdf2-sha256$"):

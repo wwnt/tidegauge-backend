@@ -29,12 +29,16 @@ func Sync(w http.ResponseWriter, r *http.Request) {
 
 	username := requestUsername(r)
 
+	// 只有管理员不受权限表限制；其余角色（含任何异常的负数角色）一律按权限表过滤。
 	var permissions common.UUIDStringsMap
-	if requestRole(r) == auth.NormalUser {
+	if requestRole(r) < auth.Admin {
 		permissions, err = authorization.GetPermissions(username)
 		if err != nil {
 			slog.Error("Failed to get user permissions", "username", username, "error", err)
 			return
+		}
+		if permissions == nil {
+			permissions = common.UUIDStringsMap{}
 		}
 	}
 
@@ -200,7 +204,7 @@ func currentSyncDataScope(username string) (common.UUIDStringsMap, pubsub.TopicS
 		return common.UUIDStringsMap{}, pubsub.TopicSet{}
 	}
 
-	if user.Role != auth.NormalUser {
+	if user.Role >= auth.Admin {
 		// nil means full access for admin/super-admin (current behavior).
 		return nil, nil
 	}

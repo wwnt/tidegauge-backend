@@ -84,7 +84,7 @@ If the token is invalid or expired, the API will return a 401 Unauthorized error
 
 ### 4. Fetch Historical Data: `dataHistory` API
 - **Endpoint**: `/dataHistory`
-- **Method**: `POST`
+- **Method**: `GET`
 - **Parameters**:
     - `station_id`: ID from `listStation`.
     - `item_name`: Item name from `listItem`.

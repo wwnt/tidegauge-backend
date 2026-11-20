@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -17,6 +19,7 @@ func ListStation(w http.ResponseWriter, r *http.Request) {
 	stations, err := db.GetStations()
 	if err != nil {
 		slog.Error("Failed to get stations list", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, stations)
@@ -32,6 +35,11 @@ func EditStation(w http.ResponseWriter, r *http.Request) {
 	defer editMu.Unlock()
 	if err := db.EditStation(&station); err != nil {
 		slog.Error("Failed to edit station", "error", err)
+		if errors.Is(err, db.ErrStationIdentifierExists) {
+			w.WriteHeader(http.StatusConflict)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 	if !station.Upstream { // Only sync the local station
@@ -57,10 +65,16 @@ func DelStation(w http.ResponseWriter, r *http.Request) {
 	// Can only delete local stations
 	if n, err := db.DelLocalStation(stationId); err != nil {
 		slog.Error("Failed to delete local station", "station_id", stationId, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	} else if n > 0 {
+		// 断开该站点的在线连接，v1 和 Sync V2 两条接入路径都要处理；
+		// 否则已删除的站点还会继续往库里写数据。
 		if value, ok := recvConnections.Load(stationId); ok {
 			_ = value.(*yamux.Session).Close()
+		}
+		if v2StationServer != nil {
+			v2StationServer.Disconnect(stationId)
 		}
 		hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgDelUpstreamStation, Body: stationId}, nil)
 	}
@@ -72,6 +86,7 @@ func ListDevice(w http.ResponseWriter, r *http.Request) {
 	devices, err := db.GetDevices(stationId)
 	if err != nil {
 		slog.Error("Failed to get devices", "station_id", stationId, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, devices)
@@ -87,11 +102,21 @@ func EditDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Can only edit local stations
-	if up, err := db.IsUpstreamStation(device.StationId); err != nil || up {
+	if up, err := db.IsUpstreamStation(device.StationId); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			slog.Error("Failed to look up station for device edit", "station_id", device.StationId, "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		return
+	} else if up {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	if err := db.EditDevice(device); err != nil {
 		slog.Error("Failed to edit device", "device", device.Name, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgSyncDevice, Body: device}, nil)
@@ -102,6 +127,7 @@ func ListDeviceRecord(w http.ResponseWriter, r *http.Request) {
 	deviceRecords, err := db.GetDeviceRecords()
 	if err != nil {
 		slog.Error("Failed to get device records", "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, deviceRecords)
@@ -114,7 +140,16 @@ func EditDeviceRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if dr.Id == uuid.Nil {
-		if up, err := db.IsUpstreamStation(dr.StationId); err != nil || up {
+		if up, err := db.IsUpstreamStation(dr.StationId); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				w.WriteHeader(http.StatusNotFound)
+			} else {
+				slog.Error("Failed to look up station for device record edit", "station_id", dr.StationId, "error", err)
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+			return
+		} else if up {
+			w.WriteHeader(http.StatusForbidden)
 			return
 		}
 	}
@@ -123,6 +158,11 @@ func EditDeviceRecord(w http.ResponseWriter, r *http.Request) {
 	defer editMu.Unlock()
 	if err := db.EditDeviceRecord(&dr); err != nil {
 		slog.Error("Failed to edit device record", "device_record_id", dr.Id, "error", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 	hub.Publish(BrokerConfig, SendMsgStruct{Type: kMsgEditDeviceRecord, Body: dr}, nil)
@@ -143,6 +183,7 @@ func ListItem(w http.ResponseWriter, r *http.Request) {
 	items, err := db.GetItems(stationId)
 	if err != nil {
 		slog.Error("Failed to get items", "station_id", stationId, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -174,6 +215,7 @@ func DataHistory(w http.ResponseWriter, r *http.Request) {
 	ds, err := db.GetDataHistory(stationId, itemName, custype.UnixMs(start), custype.UnixMs(end))
 	if err != nil {
 		slog.Error("Failed to get data history", "station_id", stationId, "item_name", itemName, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, ds)

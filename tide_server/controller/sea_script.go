@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"tide/tide_server/db"
 
@@ -30,8 +31,31 @@ func init() {
 	}
 }
 
+// externalHTTPClient 用于抓取第三方站点（IOC、PSMSL）。必须带超时：
+// http.Get 用的 DefaultClient 没有超时，对端挂起时调用方会永久阻塞。
+var externalHTTPClient = &http.Client{Timeout: 60 * time.Second}
+
+// refreshExternalSeaData 周期性抓取第三方海平面数据。两个抓取函数解析的是别人的网页/XML，
+// 格式随时可能变；任何一次 panic 都只应让这一轮失败，不能让整个服务进程退出
+// （本函数在启动时最先执行，进程退出后被 systemd 拉起又会立刻再崩）。
+func refreshExternalSeaData() {
+	run := func(name string, fn func()) {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("External sea data refresh panicked", "task", name, "panic", r)
+			}
+		}()
+		fn()
+	}
+	for {
+		run("seaHeight", seaHeight)
+		run("stationInfoGlossAll", stationInfoGlossAll)
+		time.Sleep(120 * time.Second)
+	}
+}
+
 func seaHeight() {
-	resp, err := http.Get("https://www.ioc-sealevelmonitoring.org/list.php?operator=&showall=all&output=general")
+	resp, err := externalHTTPClient.Get("https://www.ioc-sealevelmonitoring.org/list.php?operator=&showall=all&output=general")
 	if err != nil {
 		slog.Error("Failed to fetch IOC sea level data", "error", err)
 		return
@@ -48,8 +72,14 @@ func seaHeight() {
 		return
 	}
 
+	const headerRows = 3
 	tr := doc.Find("div.maincontent > table > tbody > tr > td > form > table > tbody > tr")
-	tr = tr.Slice(3, goquery.ToEnd)
+	// goquery 的 Slice 不做越界检查：页面不是预期的表格（维护页、改版）时直接切片会 panic。
+	if tr.Length() <= headerRows {
+		slog.Error("Unexpected IOC page layout, keeping previous sea level data", "rows", tr.Length())
+		return
+	}
+	tr = tr.Slice(headerRows, goquery.ToEnd)
 	var data []db.StationSeaLevel
 	tr.Each(func(i int, selection *goquery.Selection) {
 		td := selection.Children()
@@ -69,6 +99,11 @@ func seaHeight() {
 		}
 		data = append(data, db.StationSeaLevel{Code: code, Lat: pos.Lat, Lon: pos.Lon, Level: level})
 	})
+	// UpdateSeaLevel 先清空再写入；一行有效数据都没解析出来时不要用空结果覆盖上一轮的数据。
+	if len(data) == 0 {
+		slog.Error("No sea level rows parsed from IOC page, keeping previous data")
+		return
+	}
 	err = db.UpdateSeaLevel(data)
 	if err != nil {
 		slog.Error("Failed to update sea level data", "error", err)
@@ -98,7 +133,7 @@ type glossStations struct {
 }
 
 func stationInfoGlossAll() {
-	resp, err := http.Get("https://www.psmsl.org/products/gloss/data/glossCoreNetwork.xml")
+	resp, err := externalHTTPClient.Get("https://www.psmsl.org/products/gloss/data/glossCoreNetwork.xml")
 	if err != nil {
 		slog.Error("Failed to fetch GLOSS core network data", "error", err)
 		return

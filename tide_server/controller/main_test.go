@@ -29,6 +29,9 @@ func TestMain(m *testing.M) {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	global.ReadConfig("../config.test.json")
+	// 测试会走 /applyAccount、/passApplication 等会发通知邮件的接口；
+	// 无论 config.test.json 里配了什么 SMTP 账号，测试都不能真的发信。
+	global.Smtp.Auth = nil
 	global.Config.Debug = true
 	global.Config.Keycloak.BasePath = ""
 	if global.Config.Jwt.Expire <= 0 {

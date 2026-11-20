@@ -29,19 +29,27 @@ func NewJwt(db *sql.DB, signingKey []byte, issuer string, expire time.Duration) 
 }
 
 // CheckUserPwd checks username/password against stored password hashes in users.password_hash.
+// 待审批/已禁用的账号（role < NormalUser）一律视为校验失败，不能登录——
+// 与 Keycloak 模式下禁用账号拿不到令牌的行为一致。
 func (j *JwtManager) CheckUserPwd(username, password string) bool {
 	if username == "" || password == "" {
 		return false
 	}
-	var hash string
-	err := j.db.QueryRow("select password_hash from users where username=$1", username).Scan(&hash)
+	var (
+		hash string
+		role int
+	)
+	err := j.db.QueryRow("select password_hash, role from users where username=$1", username).Scan(&hash, &role)
 	if err != nil {
 		return false
 	}
 	if hash == "" {
 		return false
 	}
-	return verifyPasswordHash(password, hash)
+	if !verifyPasswordHash(password, hash) {
+		return false
+	}
+	return role >= auth.NormalUser
 }
 
 // Login reads username/password from form and returns a JSON token similar to Keycloak's JWT structure.

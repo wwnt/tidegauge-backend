@@ -1,15 +1,18 @@
 package controller
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"tide/common"
@@ -26,18 +29,17 @@ import (
 func ListCameraStatusPermission(w http.ResponseWriter, r *http.Request) {
 	var username string
 	role := requestRole(r)
-	if role == auth.NormalUser {
-		username = requestUsername(r)
-	} else if role >= auth.Admin {
+	if role >= auth.Admin {
 		username = r.URL.Query().Get("username")
 	} else {
-		return
+		username = requestUsername(r)
 	}
 
 	if role >= auth.Admin && username == "" {
 		stations, err := db.GetStations()
 		if err != nil {
 			slog.Error("Failed to get stations for camera permissions", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		permission := make(map[uuid.UUID]json.RawMessage)
@@ -51,6 +53,7 @@ func ListCameraStatusPermission(w http.ResponseWriter, r *http.Request) {
 	permission, err := authorization.GetCameraStatusPermissions(username)
 	if err != nil {
 		slog.Error("Failed to get camera status permissions", "username", username, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, permission)
@@ -71,23 +74,36 @@ func EditCameraStatusPermission(w http.ResponseWriter, r *http.Request) {
 
 	dstUser, err := userManager.GetUser(permission.Username)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		slog.Error("Failed to get user for camera permission edit", "username", permission.Username, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	// can not edit admins permission
 	if dstUser.Role >= auth.Admin {
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 	if err = authorization.EditCameraStatusPermission(permission.Username, permission.Scopes); err != nil {
 		slog.Error("Failed to edit camera status permission", "username", permission.Username, "error", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	writeOK(w)
 }
 
+// validCameraName 拒绝会改变路径含义的摄像头名。名字来自查询参数，会被拼进快照缓存
+// 目录的路径和发往上游的 URL。
+func validCameraName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, `/\`) && !strings.ContainsRune(name, 0)
+}
+
 func CameraLiveSnapshot(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
-	if name == "" {
+	if !validCameraName(name) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -102,36 +118,54 @@ func CameraLiveSnapshot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 注意：这里没有按摄像头查权限表，只有账号级的 live_camera 开关
+	// （validateLiveSnapshotMiddleware）。是否要像 /cameraLatestSnapshot 那样再按
+	// permissions_camera_status 收紧，是权限模型上的取舍，现状保持不变。
+
 	if b, snapErr := v2SnapshotOrErr(stationID, name, 30*time.Second); snapErr == nil {
 		w.Header().Set("Content-Type", "image/jpeg")
 		_, _ = w.Write(b)
 		return
 	} else if !errors.Is(snapErr, syncv2station.ErrStationNotConnected) {
-		w.WriteHeader(http.StatusBadRequest)
+		slog.Warn("Live snapshot via sync v2 failed", "station_id", stationID, "camera", name, "error", snapErr)
+		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
 
 	value, ok := recvConnections.Load(stationID)
 	if !ok {
+		// 站点不在线。
+		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	stationConn, err := value.(*yamux.Session).Open()
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
 	defer func() { _ = stationConn.Close() }()
 
 	if _, err := stationConn.Write([]byte{common.MsgCameraSnapShot}); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
 	if err = json.NewEncoder(stationConn).Encode(name); err != nil {
+		w.WriteHeader(http.StatusBadGateway)
+		return
+	}
+	// v1 协议没有错误帧：站点抓图失败时直接关流，一个字节都不会发。先读完再决定状态码，
+	// 不能把空响应当成一张图片返回 200。快照大小与 v2 的帧上限一致。
+	img, err := io.ReadAll(io.LimitReader(stationConn, maxLiveSnapshotBytes))
+	if err != nil || len(img) == 0 {
+		w.WriteHeader(http.StatusBadGateway)
 		return
 	}
 	w.Header().Set("Content-Type", "image/jpeg")
-	_, _ = io.Copy(w, stationConn)
+	_, _ = w.Write(img)
 }
+
+// maxLiveSnapshotBytes 是经 v1 连接转发的单张实时快照的上限。
+const maxLiveSnapshotBytes = 32 << 20
 
 type imgInfo struct {
 	Millisecond custype.UnixMs `json:"millisecond"`
@@ -143,7 +177,7 @@ func CameraLatestSnapShot(w http.ResponseWriter, r *http.Request) {
 	cameraName := query.Get("name")
 	stationIDRaw := query.Get("station_id")
 	afterRaw := query.Get("after")
-	if cameraName == "" || stationIDRaw == "" {
+	if !validCameraName(cameraName) || stationIDRaw == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -163,12 +197,25 @@ func CameraLatestSnapShot(w http.ResponseWriter, r *http.Request) {
 
 	isUp, err := db.IsUpstreamStation(stationID)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 
 	// the station is from upstream
 	if isUp {
+		// 上游分支里的失败路径原先都是直接 return（客户端收到 200 空响应），
+		// 统一用这个标记兜底成 502。
+		responded := false
+		defer func() {
+			if !responded {
+				w.WriteHeader(http.StatusBadGateway)
+			}
+		}()
+
 		// get the latest cache time
 		var latestCacheTS custype.UnixMs
 		cachedDirs, err := os.ReadDir(path.Join(global.Config.Tide.Camera.Storage, stationID.String(), cameraName))
@@ -210,7 +257,7 @@ func CameraLatestSnapShot(w http.ResponseWriter, r *http.Request) {
 				slog.Error("Upstream auth client unavailable", "upstream_id", upstream.Id, "url", upstreamState.config.Url)
 				continue
 			}
-			snapshotURL := upstreamState.config.Url + cameraLatestSnapshotPath + "?station_id=" + stationID.String() + "&name=" + cameraName + "&after=" + latestCacheTS.String()
+			snapshotURL := upstreamState.config.Url + cameraLatestSnapshotPath + "?station_id=" + stationID.String() + "&name=" + url.QueryEscape(cameraName) + "&after=" + latestCacheTS.String()
 			resp, err := upstreamState.httpClient.DoWithAuth(r.Context(), func(token string) (*http.Request, error) {
 				req, reqErr := http.NewRequestWithContext(r.Context(), http.MethodGet, snapshotURL, nil)
 				if reqErr != nil {
@@ -279,6 +326,7 @@ func CameraLatestSnapShot(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		WriteResponse:
+			responded = true
 			writeJSON(w, http.StatusOK, imgsReturn)
 			break
 		}

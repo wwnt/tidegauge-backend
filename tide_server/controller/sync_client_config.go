@@ -188,11 +188,12 @@ func fullSyncConfigClient(conn net.Conn, upstream *upstreamSyncState) (retOk boo
 }
 
 func incrementSyncConfigClient(conn net.Conn, state *upstreamSyncState) {
-	var (
-		decoder = json.NewDecoder(conn)
-		msg     RcvMsgStruct
-	)
+	decoder := json.NewDecoder(conn)
 	for {
+		// msg 必须每轮新建：handleSyncConfigMsg 会把 msg.Body（json.RawMessage）按引用发布给
+		// hub 的订阅者，由它们异步序列化。复用同一个变量时，Decode 会把下一条消息解码进
+		// 同一块底层数组，尚未发出的上一条事件内容就被覆盖成下一条（或一段非法 JSON）。
+		var msg RcvMsgStruct
 		if err := decoder.Decode(&msg); err != nil {
 			if err != io.EOF && !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "use of closed network connection") {
 				slog.Error("Failed to decode increment sync config message", "error", err)

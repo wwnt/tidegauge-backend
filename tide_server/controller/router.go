@@ -98,18 +98,38 @@ func setupRouter() http.Handler {
 	handle(http.MethodGet, "/cameraSnapshot", CameraLiveSnapshot, validateMiddleware, validateLiveSnapshotMiddleware)
 	handle(http.MethodGet, cameraLatestSnapshotPath, CameraLatestSnapShot, authMW...)
 
-	registerPprofRoutes(mux)
+	registerPprofRoutes(mux, adminMW...)
 
 	// must be setup first
-	return chain(mux, slogLoggerMiddleware)
+	return chain(mux, slogLoggerMiddleware, limitRequestBodyMiddleware)
 }
 
-func registerPprofRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /debug/pprof/", pprof.Index)
-	mux.HandleFunc("GET /debug/pprof/cmdline", pprof.Cmdline)
-	mux.HandleFunc("GET /debug/pprof/profile", pprof.Profile)
-	mux.HandleFunc("GET /debug/pprof/symbol", pprof.Symbol)
-	mux.HandleFunc("GET /debug/pprof/trace", pprof.Trace)
+// maxRequestBodyBytes 是普通 JSON/表单请求体的上限。接口里最大的请求体是权限表和
+// 订阅表，远小于 1 MiB；不设上限的话，匿名的 /applyAccount 可以被用来灌任意大的请求体。
+const maxRequestBodyBytes = 1 << 20
+
+func limitRequestBodyMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 协议升级请求（/sync、/sync_v2/*、WebSocket）不带请求体，连接会被 Hijack，不要包装。
+		if r.Body != nil && r.Header.Get("Upgrade") == "" {
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// registerPprofRoutes 注册 pprof 调试端点。它们会暴露 goroutine 栈、堆内容和命令行，
+// 且 profile/trace 可由调用方指定时长占用 CPU，所以只对管理员开放
+// （浏览器或 go tool pprof 可以用 ?token=<access_token> 传令牌）。
+func registerPprofRoutes(mux *http.ServeMux, middlewares ...Middleware) {
+	handle := func(pattern string, h http.HandlerFunc) {
+		mux.Handle(pattern, chain(h, middlewares...))
+	}
+	handle("GET /debug/pprof/", pprof.Index)
+	handle("GET /debug/pprof/cmdline", pprof.Cmdline)
+	handle("GET /debug/pprof/profile", pprof.Profile)
+	handle("GET /debug/pprof/symbol", pprof.Symbol)
+	handle("GET /debug/pprof/trace", pprof.Trace)
 }
 
 func upgradeWsMiddleware(next http.Handler) http.Handler {
@@ -140,8 +160,18 @@ func attachAuthenticatedUser(r *http.Request, username string) authResult {
 
 	user, err := userManager.GetUser(username)
 	if err != nil {
+		if errors.Is(err, auth.ErrUserNotFound) {
+			// 令牌有效但用户已被删除。
+			return authResult{StatusCode: http.StatusUnauthorized}
+		}
 		slog.Error("Failed to get user info in request auth", "username", username, "error", err)
 		return authResult{StatusCode: http.StatusInternalServerError}
+	}
+	// 待审批/已禁用的账号（角色 < NormalUser）不能访问任何需要登录的接口。
+	// 必须在这里统一拦截：下游多处用 "role == NormalUser" 区分普通用户和管理员，
+	// 负数角色会落进管理员分支。
+	if user.Role < auth.NormalUser {
+		return authResult{StatusCode: http.StatusForbidden}
 	}
 	return authResult{Request: withRequestUser(r, username, user)}
 }
@@ -156,7 +186,7 @@ func authenticateRequest(r *http.Request) authResult {
 
 func closeWSByHTTPStatus(ws *websocket.Conn, statusCode int) {
 	wsCode := wsStatusInternalServerError
-	if statusCode == http.StatusUnauthorized {
+	if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
 		wsCode = wsStatusUnauthorized
 	}
 	_ = ws.Close(wsCode, http.StatusText(statusCode))
@@ -202,7 +232,7 @@ func validateAdminMiddleware(next http.Handler) http.Handler {
 
 func validateLiveSnapshotMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if requestRole(r) == auth.NormalUser && !requestLiveCamera(r) {
+		if requestRole(r) < auth.Admin && !requestLiveCamera(r) {
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}

@@ -83,7 +83,8 @@ func SyncStationInfo(stationId uuid.UUID, info common.StationInfoStruct) (retOk 
 		if !ok {
 			numNewItems++
 		}
-		if !ok || oldItemInfo.Name != newItemInfo.DeviceName || oldItemInfo.Type != newItemInfo.Type {
+		// 只有新增的 item，或设备名/类型变了的 item 才需要写库并广播。
+		if !ok || oldItemInfo.DeviceName != newItemInfo.DeviceName || oldItemInfo.Type != newItemInfo.Type {
 			item := db.Item{StationId: stationId, Name: itemName, Type: newItemInfo.Type, DeviceName: newItemInfo.DeviceName}
 			if err = db.EditItem(item); err != nil {
 				slog.Error("Failed to edit item", "station_id", stationId, "item_name", itemName, "error", err)

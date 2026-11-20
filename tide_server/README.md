@@ -42,6 +42,12 @@ Following https://docs.syncthing.net/users/autostart.html
 
 `psql -d tidegauge -U postgres -f tide_server/schema.sql`
 
+`schema.sql` creates a built-in super admin, `tgm-admin`, with the initial password `123456`.
+When the server runs without Keycloak (no `keycloak.base_path` in the config, i.e. local JWT login),
+that account can log in right away: **change its password immediately after the first login**
+(`POST /editUser` with the new password). The server logs a `SECURITY` error at every start
+while the default password is still in use.
+
 # 4. Build
 
 ## 4.1. Windows or Linux

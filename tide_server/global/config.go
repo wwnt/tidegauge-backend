@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"log/slog"
+	"net"
 	"net/smtp"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/lmittmann/tint"
@@ -51,9 +54,31 @@ type pgConfigStruct struct {
 	DBName   string `json:"dbname"`
 }
 
+// DSN 生成 libpq 关键字/值形式的连接串，库名用 dbName（传空串则用配置里的 DBName）。
+//
+// 每个值都加引号并转义：直接把值拼进去的话，空密码会让解析器把后面的 "dbname=x" 当成
+// 密码的值，含空格的密码会被截断并吞掉后面的参数，报出来的错误还指不到配置上。
+func (c pgConfigStruct) DSN(dbName string) string {
+	if dbName == "" {
+		dbName = c.DBName
+	}
+	quote := func(v string) string {
+		return "'" + strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(v) + "'"
+	}
+	return "host=" + quote(c.Host) +
+		" port=" + quote(c.Port) +
+		" user=" + quote(c.User) +
+		" password=" + quote(c.Password) +
+		" dbname=" + quote(dbName) +
+		" sslmode=disable"
+}
+
 type smtpConfigStruct struct {
-	Host     string `json:"host"`
+	Host string `json:"host"`
+	// Addr 是 "host:port" 形式的服务器地址。留空时由 Host 和 Port 组合而成
+	// （config.template.json 写的是 host + port）。
 	Addr     string `json:"addr"`
+	Port     int    `json:"port"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
@@ -70,7 +95,11 @@ func ReadConfig(name string) {
 	if err = json.Unmarshal(b, &Config); err != nil {
 		log.Fatal(err)
 	}
-	if Config.Smtp.Username != "" && Config.Smtp.Password != "" && Config.Smtp.Host != "" && Config.Smtp.Addr != "" {
+	if Config.Smtp.Addr == "" && Config.Smtp.Host != "" && Config.Smtp.Port > 0 {
+		Config.Smtp.Addr = net.JoinHostPort(Config.Smtp.Host, strconv.Itoa(Config.Smtp.Port))
+	}
+	mailEnabled := Config.Smtp.Username != "" && Config.Smtp.Password != "" && Config.Smtp.Host != "" && Config.Smtp.Addr != ""
+	if mailEnabled {
 		Smtp.Auth = smtp.PlainAuth("", Config.Smtp.Username, Config.Smtp.Password, Config.Smtp.Host)
 	}
 
@@ -88,4 +117,9 @@ func ReadConfig(name string) {
 		AddSource:  true,
 	})
 	slog.SetDefault(slog.New(handler))
+
+	if !mailEnabled {
+		// 账号申请/审批通知靠邮件；没配全时静默不发，至少在启动日志里说明。
+		slog.Warn("SMTP is not fully configured (need host, port or addr, username, password); notification mails are disabled")
+	}
 }

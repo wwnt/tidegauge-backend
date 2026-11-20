@@ -68,9 +68,12 @@ func EditDevice(d Device) (err error) {
 	return err
 }
 
+// SyncDevice 按上游发来的内容新建或更新设备。
+// specs 为空（nil）时按 JSON null 处理：列是 NOT NULL 的 jsonb，而 pgx 会把 nil 的
+// json.RawMessage 编码成 SQL NULL，直接绑定会违反约束。
 func SyncDevice(d Device) (int64, error) {
-	res, err := TideDB.Exec(`insert into devices(station_id,name,specs,last_maintenance) VALUES ($1,$2,$3,$4) on conflict (station_id,name) do
-update set specs=excluded.specs, last_maintenance=excluded.last_maintenance where devices.specs!=$3 or devices.last_maintenance!=$4`,
+	res, err := TideDB.Exec(`insert into devices(station_id,name,specs,last_maintenance) VALUES ($1,$2,coalesce($3,'null'::jsonb),$4) on conflict (station_id,name) do
+update set specs=excluded.specs, last_maintenance=excluded.last_maintenance where devices.specs!=excluded.specs or devices.last_maintenance!=excluded.last_maintenance`,
 		d.StationId, d.Name, d.Specs, d.LastMaintenance)
 	return checkResult(res, err)
 }

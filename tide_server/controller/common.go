@@ -26,17 +26,20 @@ var (
 	authorization auth.Permission
 )
 
+const (
+	// defaultJwtExpire 是配置里没有 jwt.expire 时的令牌有效期。
+	defaultJwtExpire = 6 * time.Hour
+
+	// schema.sql 里预置的超级管理员账号及其初始密码（与 schema.sql 的 insert 保持一致）。
+	schemaDefaultAdminUsername = "tgm-admin"
+	schemaDefaultAdminPassword = "123456"
+)
+
 func Init() {
 	db.Init()
 	project.RegisterReleaseFunc(db.CloseDB)
 
-	go func() {
-		for {
-			seaHeight()
-			stationInfoGlossAll()
-			time.Sleep(120 * time.Second)
-		}
-	}()
+	go refreshExternalSeaData()
 
 	if global.Config.Keycloak.BasePath != "" {
 		userManager = usermanager.NewKeycloak(
@@ -50,13 +53,28 @@ func Init() {
 		)
 	} else {
 		key := make([]byte, 32)
-		_, _ = rand.Read(key)
-		userManager = usermanager.NewJwt(
+		if _, err := rand.Read(key); err != nil {
+			slog.Error("Failed to generate JWT signing key", "error", err)
+			os.Exit(1)
+		}
+		// jwt.expire 缺省为 0 时签出的令牌立刻过期，表现为"能登录但所有请求 401"。
+		expire := global.Config.Jwt.Expire * time.Second
+		if expire <= 0 {
+			expire = defaultJwtExpire
+			slog.Warn("jwt.expire is not configured, using default", "expire", expire)
+		}
+		jwtManager := usermanager.NewJwt(
 			db.TideDB,
 			key,
 			"navi-tech.net",
-			global.Config.Jwt.Expire*time.Second,
+			expire,
 		)
+		// schema.sql 预置的超级管理员带着公开的初始密码；仍在使用时每次启动都高声提醒。
+		if jwtManager.CheckUserPwd(schemaDefaultAdminUsername, schemaDefaultAdminPassword) {
+			slog.Error("SECURITY: the built-in super admin still uses the default password from schema.sql; change it now",
+				"username", schemaDefaultAdminUsername)
+		}
+		userManager = jwtManager
 	}
 
 	authorization = permission.NewPostgres(db.TideDB)

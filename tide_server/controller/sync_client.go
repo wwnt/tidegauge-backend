@@ -65,7 +65,8 @@ func fetchUpstreamLoopV2(upstream *upstreamSyncState) {
 		10*time.Second,
 		func(err error) {
 			if err != nil {
-				slog.Debug("v2 下游同步断开，准备重连", "url", upstream.config.Url, "error", err)
+				// 用 Warn：反复重连失败（例如全量同步某一步每次都出错）在默认日志级别下必须可见。
+				slog.Warn("v2 下游同步断开，准备重连", "url", upstream.config.Url, "error", err)
 			}
 			// 断开后清理可用 items (保持现有语义)
 			if err := db.RemoveAvailableByUpstreamId(upstream.config.Id); err != nil {
@@ -150,6 +151,21 @@ func handleSyncClientConn(conn io.ReadWriteCloser, upstream *upstreamSyncState) 
 			slog.Error("Failed to remove available items by upstream ID", "upstream_id", upstream.config.Id, "error", err)
 		}
 	}()
+
+	// 上游被删除或修改时 upstream.ctx 会被取消。取消请求的 context 对已经完成协议升级的
+	// 连接不起作用，必须主动关闭会话；否则被删除的上游还会继续往库里写数据，
+	// 被修改的上游则是新旧两个会话并存。（ctx 为 nil 只出现在直接构造 state 的测试里。）
+	if upstream.ctx != nil {
+		sessionDone := make(chan struct{})
+		defer close(sessionDone)
+		go func() {
+			select {
+			case <-upstream.ctx.Done():
+				_ = session.Close()
+			case <-sessionDone:
+			}
+		}()
+	}
 
 	stream1, err := session.Open()
 	if err != nil {

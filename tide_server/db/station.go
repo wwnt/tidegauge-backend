@@ -23,6 +23,9 @@ type Station struct {
 	Upstream        bool            `json:"upstream"`
 }
 
+// ErrStationIdentifierExists 表示新建本地站点时 identifier 已被另一个未删除的本地站点占用。
+var ErrStationIdentifierExists = errors.New("already has the same identifier")
+
 func GetLocalStationIdByIdentifier(identifier string) (uuid.UUID, error) {
 	var stationId uuid.UUID
 	err := TideDB.QueryRow(`select id from stations where identifier=$1 and upstream=false and deleted_at is null`, identifier).Scan(&stationId)
@@ -75,7 +78,7 @@ func EditStation(s *Station) (err error) {
 			_, err = tx.Exec(`insert into stations(id,identifier,name,location,partner,upstream) VALUES ($1,$2,$3,coalesce($4,'null'::jsonb),coalesce($5,'null'::jsonb),false)`, s.Id, s.Identifier, s.Name, s.Location, s.Partner)
 		} else {
 			if deletedAt == nil {
-				return errors.New("already has the same identifier")
+				return ErrStationIdentifierExists
 			}
 			_, err = tx.Exec(`update stations set name=$2,location=coalesce($3,'null'::jsonb),partner=coalesce($4,'null'::jsonb),upstream=false,deleted_at=null where id=$1`, s.Id, s.Name, s.Location, s.Partner)
 		}
@@ -96,6 +99,12 @@ func EditStation(s *Station) (err error) {
 	return tx.Commit()
 }
 
+// SyncStation 按上游发来的内容新建或更新一个上游站点，并登记它与该上游的关系。
+//
+// 站点 id 来自上游的消息。如果它与一个正在使用的本地站点（upstream=false 且未删除）
+// 相同——例如两台服务器互为上游时，本机的站点会被对端原样发回来——本函数什么都不做：
+// 既不把本地站点改成上游站点（那样它自己的采集端会被拒之门外，之后删除上游还会把它
+// 连同数据一起删掉），也不登记关联。
 func SyncStation(upstreamId int, s Station) (int64, error) {
 	tx, err := TideDB.Begin()
 	if err != nil {
@@ -103,15 +112,18 @@ func SyncStation(upstreamId int, s Station) (int64, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.Exec(`insert into stations(id,identifier,name,location,upstream) VALUES ($1,$2,$3,coalesce($4,'null'::jsonb),true) on conflict (id) 
-do update set location=excluded.location, upstream=true, deleted_at=null where stations.location!=coalesce($4,'null'::jsonb) or stations.upstream!=true or stations.deleted_at is not null`,
+	res, err := tx.Exec(`insert into stations(id,identifier,name,location,upstream) VALUES ($1,$2,$3,coalesce($4,'null'::jsonb),true) on conflict (id)
+do update set location=excluded.location, upstream=true, deleted_at=null
+where (stations.upstream=true or stations.deleted_at is not null)
+  and (stations.location!=excluded.location or stations.upstream!=true or stations.deleted_at is not null)`,
 		s.Id, s.Identifier, s.Name, s.Location)
 	n, err := checkResult(res, err)
 	if err != nil {
 		return 0, err
 	}
 
-	_, err = tx.Exec(`insert into upstream_stations(upstream_id, station_id) VALUES ($1,$2) on conflict do nothing`, upstreamId, s.Id)
+	_, err = tx.Exec(`insert into upstream_stations(upstream_id, station_id)
+select $1, id from stations where id=$2 and upstream=true on conflict do nothing`, upstreamId, s.Id)
 	if err != nil {
 		return 0, err
 	}
@@ -155,6 +167,9 @@ func DelLocalStation(id uuid.UUID) (int64, error) {
 }
 
 // DelUpstreamStation delete this station from upstream_stations, and if it does not belong to any other upstream, delete it completely
+//
+// 只会删除 upstream=true 的站点（与 DelUpstream 的条件一致）：stationId 来自上游发来的
+// 消息，不能让一条带着本地站点 UUID 的删除事件把本地站点连同设备、数据项和状态日志级联删掉。
 func DelUpstreamStation(upstreamId int, stationId uuid.UUID) (int64, error) {
 	tx, err := TideDB.Begin()
 	if err != nil {
@@ -168,7 +183,7 @@ func DelUpstreamStation(upstreamId int, stationId uuid.UUID) (int64, error) {
 		return 0, err
 	}
 	n, err := checkResult(
-		tx.Exec(`delete from stations where id=$1 and id not in (select station_id from upstream_stations)`, stationId),
+		tx.Exec(`delete from stations where id=$1 and upstream=true and id not in (select station_id from upstream_stations)`, stationId),
 	)
 	if err != nil {
 		return 0, err

@@ -36,7 +36,7 @@ func withRequestUser(r *http.Request, username string, user auth.User) *http.Req
 	ctx = context.WithValue(ctx, reqCtxUsername, username)
 	ctx = context.WithValue(ctx, reqCtxRole, user.Role)
 	ctx = context.WithValue(ctx, reqCtxEmail, user.Email)
-	if user.Role == auth.NormalUser {
+	if user.Role < auth.Admin {
 		ctx = context.WithValue(ctx, reqCtxLiveCamera, user.LiveCamera)
 	}
 	return r.WithContext(ctx)
@@ -58,12 +58,6 @@ func requestRole(r *http.Request) int {
 	v := r.Context().Value(reqCtxRole)
 	n, _ := v.(int)
 	return n
-}
-
-func requestEmail(r *http.Request) string {
-	v := r.Context().Value(reqCtxEmail)
-	s, _ := v.(string)
-	return s
 }
 
 func requestLiveCamera(r *http.Request) bool {

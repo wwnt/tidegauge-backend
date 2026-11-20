@@ -2,7 +2,6 @@ package db
 
 import (
 	"database/sql"
-	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -20,23 +19,11 @@ var (
 
 func openDB() error {
 	var err error
-	TideDB, err = sql.Open("pgx", fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		global.Config.Db.Tide.Host,
-		global.Config.Db.Tide.Port,
-		global.Config.Db.Tide.User,
-		global.Config.Db.Tide.Password,
-		global.Config.Db.Tide.DBName,
-	))
+	TideDB, err = sql.Open("pgx", global.Config.Db.Tide.DSN(""))
 	if err != nil {
 		return err
 	}
-	seaDB, err = sql.Open("pgx", fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		global.Config.Db.Sea.Host,
-		global.Config.Db.Sea.Port,
-		global.Config.Db.Sea.User,
-		global.Config.Db.Sea.Password,
-		global.Config.Db.Sea.DBName,
-	))
+	seaDB, err = sql.Open("pgx", global.Config.Db.Sea.DSN(""))
 	return err
 }
 
