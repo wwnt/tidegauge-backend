@@ -3,6 +3,7 @@ package syncv2relay
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -260,6 +261,105 @@ func TestUpstreamServer_StreamSync_HandshakeFilterMissDataAndIncremental(t *test
 
 // ---- Downstream tests ----
 
+func TestProtoDeviceRoundTripKeepsSpecsAndNeverYieldsNilSpecs(t *testing.T) {
+	stationID := uuid.New()
+	full := db.StationFullInfo{
+		Station: db.Station{Id: stationID},
+		Devices: []db.Device{
+			{StationId: stationID, Name: "with_specs", Specs: json.RawMessage(`{"range":10}`), LastMaintenance: 1234},
+			{StationId: stationID, Name: "without_specs"},
+		},
+	}
+	pb := dbStationFullToProto(full)
+	require.Len(t, pb.Devices, 2)
+
+	got := protoToDbDevice(pb.Devices[0], stationID)
+	require.JSONEq(t, `{"range":10}`, string(got.Specs))
+	require.EqualValues(t, 1234, got.LastMaintenance)
+
+	// 没有 specs 的设备必须落成 JSON null：nil 会被 pgx 编码成 SQL NULL，违反列的 NOT NULL 约束。
+	got = protoToDbDevice(pb.Devices[1], stationID)
+	require.NotNil(t, got.Specs)
+	require.JSONEq(t, `null`, string(got.Specs))
+}
+
+func TestProtoDeviceRecordRoundTripKeepsVersionAndTimestamps(t *testing.T) {
+	record := db.DeviceRecord{
+		Id: uuid.New(), StationId: uuid.New(), DeviceName: "d", Record: "text",
+		CreatedAt: 1000, UpdatedAt: 2000, Version: 7,
+	}
+	require.Equal(t, record, protoToDbDeviceRecord(dbDeviceRecordToProto(record)))
+}
+
+// 补数阶段一个 item 的积压必须拆成多帧，单帧不能随积压无限增大。
+func TestUpstreamServer_MissDataIsSentInBoundedBatches(t *testing.T) {
+	stationID := uuid.New()
+	const total = missDataBatchSize*2 + 10
+	history := make([]common.DataTimeStruct, total)
+	for i := range history {
+		history[i] = common.DataTimeStruct{Value: float64(i), Millisecond: custype.UnixMs(2000 + i)}
+	}
+	srv := &UpstreamServer{Store: &fakeUpstreamStore{dataHistoryByItem: map[string][]common.DataTimeStruct{"item1": history}}}
+
+	downConn, upConn := net.Pipe()
+	t.Cleanup(func() { _ = downConn.Close() })
+	t.Cleanup(func() { _ = upConn.Close() })
+	downStream := internalsyncv2.NewRelayMessageStream(downConn, internalsyncv2.DefaultMaxFrameBytes)
+	upStream := internalsyncv2.NewRelayMessageStream(upConn, internalsyncv2.DefaultMaxFrameBytes)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- srv.handleMissDataSync(upStream, func(f *syncpb.RelayMessage) error { return upStream.Send(f) },
+			common.UUIDStringsMap{stationID: {"item1"}})
+	}()
+
+	require.NoError(t, downStream.Send(&syncpb.RelayMessage{Body: &syncpb.RelayMessage_StationsItemsLatest{
+		StationsItemsLatest: &syncpb.RelayItemsLatest{Stations: map[string]*syncpb.ItemsLatest{
+			stationID.String(): {LatestUnixMs: map[string]int64{"item1": 1000}},
+		}},
+	}}))
+
+	var sizes []int
+	next := int64(2000)
+	for {
+		f, err := downStream.Recv()
+		require.NoError(t, err)
+		batch, ok := f.Body.(*syncpb.RelayMessage_DataBatch)
+		require.True(t, ok)
+		if batch.DataBatch.StationId == "" && len(batch.DataBatch.Points) == 0 {
+			break
+		}
+		require.LessOrEqual(t, len(batch.DataBatch.Points), missDataBatchSize)
+		for _, p := range batch.DataBatch.Points {
+			require.Equal(t, next, p.UnixMs, "points must arrive complete and in order")
+			next++
+		}
+		sizes = append(sizes, len(batch.DataBatch.Points))
+	}
+	require.Equal(t, []int{missDataBatchSize, missDataBatchSize, 10}, sizes)
+	require.NoError(t, <-errCh)
+}
+
+// 增量阶段落库失败必须结束会话（返回错误），重连后才能按水位把这条数据补回来。
+func TestApplyDataBatchReturnsStoreError(t *testing.T) {
+	store := &fakeDownstreamStore{saveDataErr: errors.New("db is down")}
+	notifier := &fakeDownstreamNotifier{}
+	deps := DownstreamDeps{Store: store, Notifier: notifier}
+
+	err := applyDataBatch(deps, &syncpb.RelayDataBatch{
+		StationId: uuid.NewString(),
+		DataType:  MsgData,
+		Points:    []*syncpb.DataPoint{{ItemName: "i1", Value: 1, UnixMs: 1000}},
+	})
+	require.ErrorContains(t, err, "db is down")
+	require.Zero(t, notifier.publishDataCalls, "a point that was not stored must not be published")
+
+	store.statusErr = errors.New("db is down")
+	err = applyStatusEvent(deps, &syncpb.RelayStatusEvent{StationId: uuid.NewString(), ItemName: "i1", RowId: 3, Status: common.Normal})
+	require.ErrorContains(t, err, "db is down")
+	require.Zero(t, notifier.publishStatusCalls)
+}
+
 type pipeRoundTripper struct {
 	conn      ioReadWriteCloser
 	username  string
@@ -340,16 +440,30 @@ type fakeDownstreamStore struct {
 	updateStationCalls   int
 	saveDataCalls        int
 	ensureTableCalls     int
+
+	// calls 按调用顺序记录关键步骤，用于断言全量同步各步的先后。
+	calls []string
+
+	saveDataErr error
+	statusErr   error
+}
+
+func (s *fakeDownstreamStore) record(call string) {
+	s.mu.Lock()
+	s.calls = append(s.calls, call)
+	s.mu.Unlock()
 }
 
 func (s *fakeDownstreamStore) UpdateAvailableItems(upstreamID int, items common.UUIDStringsMap) (bool, error) {
 	s.mu.Lock()
 	s.updateAvailableCalls++
+	s.calls = append(s.calls, "UpdateAvailableItems")
 	s.mu.Unlock()
 	return true, nil
 }
 func (s *fakeDownstreamStore) RemoveAvailableByUpstreamID(upstreamID int) error { return nil }
 func (s *fakeDownstreamStore) GetStationsByUpstreamID(upstreamID int) ([]db.Station, error) {
+	s.record("GetStationsByUpstreamID")
 	return nil, nil
 }
 func (s *fakeDownstreamStore) GetDevices(stationID uuid.UUID) ([]db.Device, error) { return nil, nil }
@@ -385,6 +499,9 @@ func (s *fakeDownstreamStore) SaveItemStatusLog(stationID uuid.UUID, rowID int64
 	return false, nil
 }
 func (s *fakeDownstreamStore) UpdateAndSaveStatusLog(stationID uuid.UUID, rowID int64, itemName string, status common.Status, at time.Time) (bool, error) {
+	if s.statusErr != nil {
+		return false, s.statusErr
+	}
 	return true, nil
 }
 func (s *fakeDownstreamStore) UpdateItemStatus(stationID uuid.UUID, itemName string, status common.Status, at time.Time) (bool, error) {
@@ -401,6 +518,9 @@ func (s *fakeDownstreamStore) EnsureDataTable(itemName string) error {
 	return nil
 }
 func (s *fakeDownstreamStore) SaveDataHistory(stationID uuid.UUID, itemName string, value float64, at time.Time) (bool, error) {
+	if s.saveDataErr != nil {
+		return false, s.saveDataErr
+	}
 	s.mu.Lock()
 	s.saveDataCalls++
 	s.mu.Unlock()
@@ -561,6 +681,9 @@ func TestRunDownstream_AppliesIncrementalFrames(t *testing.T) {
 
 	store.mu.Lock()
 	require.GreaterOrEqual(t, store.updateAvailableCalls, 2) // handshake + incremental update_available
+	// 握手阶段的可用项必须在全量配置之后应用（全量配置的第一步是 GetStationsByUpstreamID）。
+	require.GreaterOrEqual(t, len(store.calls), 2)
+	require.Equal(t, []string{"GetStationsByUpstreamID", "UpdateAvailableItems"}, store.calls[:2])
 	require.GreaterOrEqual(t, store.updateStationCalls, 1)
 	require.GreaterOrEqual(t, store.ensureTableCalls, 1)
 	require.GreaterOrEqual(t, store.saveDataCalls, 1)

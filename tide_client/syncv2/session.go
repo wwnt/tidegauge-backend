@@ -21,7 +21,7 @@ type stationCommandSession interface {
 	Accept() (net.Conn, error)
 }
 
-func (c *Client) runOnConn(ctx context.Context, conn net.Conn) error {
+func (c *Client) runOnConn(ctx context.Context, conn io.ReadWriteCloser) error {
 	muxCfg := yamux.DefaultConfig()
 	muxCfg.EnableKeepAlive = false
 	muxCfg.ConnectionWriteTimeout = 30 * time.Second
@@ -31,9 +31,17 @@ func (c *Client) runOnConn(ctx context.Context, conn net.Conn) error {
 	}
 	defer func() { _ = session.Close() }()
 
+	// ctx 取消时关闭会话；函数返回时这个 goroutine 也必须退出——调用方传入的 ctx
+	// 生命周期可能远长于单次连接（controller 传的是 context.Background()），
+	// 只等 ctx.Done() 的话每次重连都会泄漏一个 goroutine 和它引用的会话。
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		<-ctx.Done()
-		_ = session.Close()
+		select {
+		case <-ctx.Done():
+			_ = session.Close()
+		case <-done:
+		}
 	}()
 
 	mainConn, err := session.Accept()
@@ -219,6 +227,12 @@ func (c *Client) serveCommandSubstreams(ctx context.Context, session stationComm
 		}
 
 		go func(commandConn net.Conn) {
+			// 命令流要处理摄像头返回的内容；panic 只应结束这一条流，不能带垮采集进程。
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error("station command stream panicked", "panic", r)
+				}
+			}()
 			if handleErr := c.handleCommandStream(ctx, commandConn); handleErr != nil && ctx.Err() == nil {
 				log.Debug("station command stream failed", "error", handleErr)
 			}

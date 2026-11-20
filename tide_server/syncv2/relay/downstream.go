@@ -37,9 +37,17 @@ func RunDownstream(ctx context.Context, cfg DownstreamConfig, deps DownstreamDep
 	}
 	defer closeConn()
 
+	// ctx 取消（上游被删除/修改）时关闭流；函数返回时这个 goroutine 也必须退出。
+	// ctx 的生命周期是整个上游配置，而本函数每次重连都会被调用一次——只等 ctx.Done()
+	// 的话，每次重连都泄漏一个 goroutine 和它引用的流。
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		<-ctx.Done()
-		_ = stream.Close()
+		select {
+		case <-ctx.Done():
+			_ = stream.Close()
+		case <-done:
+		}
 	}()
 
 	if err = runDownstreamHandshake(stream, cfg); err != nil {
@@ -148,9 +156,6 @@ func runDownstreamBootstrap(stream internalsyncv2.RelayMessageStream, cfg Downst
 	if !ok {
 		return errors.New("expected available_items")
 	}
-	if err = applyAvailableItems(cfg, deps, availBody.AvailableItems); err != nil {
-		return err
-	}
 
 	frame, err = stream.Recv()
 	if err != nil {
@@ -161,6 +166,12 @@ func runDownstreamBootstrap(stream internalsyncv2.RelayMessageStream, cfg Downst
 		return errors.New("expected full config batch")
 	}
 	if err = applyFullConfig(cfg, deps, cfgBody.ConfigBatch); err != nil {
+		return err
+	}
+	// 可用项列表在线上先于全量配置到达，但必须在全量配置之后应用：它只更新已存在的
+	// items 行，首次同步（或上游新增了 item）时这些行要等 applyFullConfig 才被创建，
+	// 先应用的话新 item 会一直是"不可用"，直到下一次重连。
+	if err = applyAvailableItems(cfg, deps, availBody.AvailableItems); err != nil {
 		return err
 	}
 
@@ -191,9 +202,14 @@ func runDownstreamIncremental(stream internalsyncv2.RelayMessageStream, cfg Down
 				}
 			}
 		case *syncpb.RelayMessage_StatusEvent:
-			applyStatusEvent(deps, body.StatusEvent)
+			// 状态和数据的落库失败必须结束会话：重连后按水位重放，这条记录才不会丢。
+			if applyErr := applyStatusEvent(deps, body.StatusEvent); applyErr != nil {
+				return fmt.Errorf("apply status event: %w", applyErr)
+			}
 		case *syncpb.RelayMessage_DataBatch:
-			applyDataBatch(deps, body.DataBatch)
+			if applyErr := applyDataBatch(deps, body.DataBatch); applyErr != nil {
+				return fmt.Errorf("apply data batch: %w", applyErr)
+			}
 		case *syncpb.RelayMessage_AvailableItems:
 			if err := applyAvailableItems(cfg, deps, body.AvailableItems); err != nil {
 				log.Error("v2 downstream: handle available items failed", "error", err)

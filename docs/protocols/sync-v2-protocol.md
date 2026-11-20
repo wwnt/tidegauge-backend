@@ -88,6 +88,7 @@ Client                              Server
 - 服务端根据 `station_identifier` 查找数据库中的站点 UUID
 - 同一站点同一时间只允许一个 v2 连接（通过 `sync.Map` 去重）
 - 服务端返回 `ServerHello{server_version}`
+- 握手有时限：从连接建立到服务端发出 `StatusLatest` 必须在 60 秒内完成，超时服务端断开连接并释放该站点的连接槽位
 
 #### 3. 站点信息同步
 
@@ -104,7 +105,9 @@ Client                              Server
   - 存在且 `changed_at` 一致 → 仅删除 `row_id > latest_row_id` 的尾巴行（多数情况是 no-op）。
   - 存在但 `changed_at` 不一致 → 视为客户端 SQLite 被重建，整表清掉。
 
-裁剪后会用最新仍存在的日志行重算受影响 `items.status` / `status_changed_at`，无日志兜底为 `('', 'epoch')`。
+裁剪后会用最新仍存在的日志行重算受影响 `items.status` / `status_changed_at`，无日志时兜底为空状态和 epoch 时间。
+
+客户端的保留期清理不会把状态日志删空：每个 item 最新的一行始终保留（见 `tide_client/db/log.go` 的 `CleanItemStatusLog`），所以正常运行的站点不会上报 `latest_row_id == 0`，本地 ROWID 也不会回退复用。
 
 服务端紧接着告知客户端裁剪后已有数据的最新位置：
 
@@ -120,7 +123,7 @@ Client                              Server
 
 #### 5. 实时数据转发
 
-客户端从本地 pubsub 收到新数据后，转换为 protobuf 帧写入 `outgoing` channel（容量 2048），由独立 goroutine 发送到流上：
+客户端从本地 pubsub 的订阅通道（容量 10000）收到新数据后，转换为 protobuf 帧，在会话主循环里直接写到流上；订阅通道写满时会话被关闭，重连后从水位重放：
 
 - `MsgData` / `MsgGpioData` → `DataBatch{replay=false}`
 - `MsgItemStatus` → `ItemStatusBatch{replay=false}`
@@ -141,7 +144,7 @@ Client                              Server
 
 ### 断线重连
 
-客户端断开后每 3 秒重试。
+客户端断开后按退避间隔重试：10 秒起，每次失败翻倍，上限 10 分钟；连接维持超过 1 分钟后重置为 10 秒。
 
 - 只有当 `sync_v2.enabled=false` 或 `sync_v2.addr` 为空时，客户端才会直接走 v1 同步。
 - 一旦启用 v2，单次 v2 会话退出后会继续重试 v2，不会因为连接失败自动切回 v1。
@@ -190,16 +193,16 @@ Downstream                           Upstream
 
 下游先使用配置的上游账号（`username/password`）调用 `/login` 获取 access token，再以 `Authorization: Bearer <token>` 发起 `/sync_v2/relay` 的 HTTP Upgrade。上游使用统一 token 认证逻辑并按认证账号权限过滤同步数据。
 
-管理员用户无数据过滤；普通用户根据权限过滤可见的站点和数据。
+管理员用户无数据过滤；其余用户根据权限表过滤可见的数据（没有任何权限的用户收不到数据）。待审批/已禁用的账号不能登录，也不能建立中继连接。
 
 #### 2. 全量配置同步
 
 上游发送：
 
 - `RelayAvailableItems`：按站点分组的可用 item 列表
-- `RelayConfigBatch{full_sync=true}`：所有站点完整信息（含设备、item、设备记录）
+- `RelayConfigBatch{full_sync=true}`：所有站点完整信息（含设备、item、设备记录）。设备带 `specs` / `last_maintenance_ms`，设备记录带 `version` 和创建/更新时间，下游据此判断是否需要更新
 
-下游对比本地数据库，同步新增/更新/删除。
+下游对比本地数据库，同步新增/更新/删除。可用 item 列表虽然先到达，但在全量配置落库之后才应用（它只更新已存在的 item 行）。
 
 **关键设计**：上游在全量同步之前先订阅 pubsub，确保同步期间的增量变更不会丢失。
 
@@ -208,7 +211,7 @@ Downstream                           Upstream
 - 下游发送 `RelayStatusLatest`（每个站点的最新状态日志行号）
 - 上游补发缺失的状态日志，封装为 `RelayConfigBatch{events}`
 - 下游发送 `RelayItemsLatest`（每个站点每个 item 的最新时间戳）
-- 上游补发缺失的数据，发送多个 `RelayDataBatch`，以空批次标记结束
+- 上游补发缺失的数据，发送多个 `RelayDataBatch`（每帧最多 4096 个点，同一 item 的积压会拆成多帧），以空批次标记结束
 
 #### 4. 增量同步
 
@@ -218,6 +221,8 @@ Downstream                           Upstream
 - 数据 → `RelayDataBatch{station_id, data_type, points}`
 - 状态变更 → `RelayStatusEvent{station_id, identifier, ...}`
 - 可用 item 变更 → `RelayAvailableItems`
+
+下游在增量阶段落库数据或状态失败时会结束会话，重连后按水位重放，保证失败的那条不丢。
 
 ### 断线重连
 

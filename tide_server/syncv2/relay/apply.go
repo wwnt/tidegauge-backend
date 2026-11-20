@@ -2,6 +2,7 @@ package syncv2relay
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"tide/common"
 	"tide/pkg/custype"
@@ -57,8 +58,10 @@ func dbStationFullToProto(sf db.StationFullInfo) *syncpb.RelayStationFull {
 
 	for _, d := range sf.Devices {
 		pb.Devices = append(pb.Devices, &syncpb.RelayDevice{
-			StationId: d.StationId.String(),
-			Name:      d.Name,
+			StationId:         d.StationId.String(),
+			Name:              d.Name,
+			Specs:             d.Specs,
+			LastMaintenanceMs: d.LastMaintenance.ToInt64(),
 		})
 	}
 	for _, i := range sf.Items {
@@ -78,10 +81,13 @@ func dbStationFullToProto(sf db.StationFullInfo) *syncpb.RelayStationFull {
 
 func dbDeviceRecordToProto(dr db.DeviceRecord) *syncpb.RelayDeviceRecord {
 	return &syncpb.RelayDeviceRecord{
-		Id:         dr.Id.String(),
-		StationId:  dr.StationId.String(),
-		DeviceName: dr.DeviceName,
-		Config:     dr.Record,
+		Id:          dr.Id.String(),
+		StationId:   dr.StationId.String(),
+		DeviceName:  dr.DeviceName,
+		Config:      dr.Record,
+		CreatedAtMs: dr.CreatedAt.ToInt64(),
+		UpdatedAtMs: dr.UpdatedAt.ToInt64(),
+		Version:     int32(dr.Version),
 	}
 }
 
@@ -101,13 +107,24 @@ func protoToDbStation(pb *syncpb.RelayStationFull) db.Station {
 	}
 }
 
+// jsonNull 是 JSON 的 null。devices.specs 是 NOT NULL 的 jsonb 列（默认值就是 JSON null），
+// 而 pgx 会把 nil 的 json.RawMessage 编码成 SQL NULL。
+var jsonNull = json.RawMessage("null")
+
 func protoToDbDevice(pb *syncpb.RelayDevice, stationID uuid.UUID) db.Device {
 	if stationID == uuid.Nil {
 		stationID, _ = uuid.Parse(pb.StationId)
 	}
+	specs := json.RawMessage(pb.Specs)
+	if len(specs) == 0 {
+		// 对端没带 specs（旧版本上游，或字段本来就是空）：写入 JSON null，不能写 SQL NULL。
+		specs = jsonNull
+	}
 	return db.Device{
-		StationId: stationID,
-		Name:      pb.Name,
+		StationId:       stationID,
+		Name:            pb.Name,
+		Specs:           specs,
+		LastMaintenance: custype.UnixMs(pb.LastMaintenanceMs),
 	}
 }
 
@@ -132,6 +149,9 @@ func protoToDbDeviceRecord(pb *syncpb.RelayDeviceRecord) db.DeviceRecord {
 		StationId:  stationID,
 		DeviceName: pb.DeviceName,
 		Record:     pb.Config,
+		CreatedAt:  custype.UnixMs(pb.CreatedAtMs),
+		UpdatedAt:  custype.UnixMs(pb.UpdatedAtMs),
+		Version:    int(pb.Version),
 	}
 }
 
@@ -376,25 +396,32 @@ func applyConfigEvent(cfg DownstreamConfig, deps DownstreamDeps, evt *syncpb.Rel
 	return nil
 }
 
-func applyStatusEvent(deps DownstreamDeps, evt *syncpb.RelayStatusEvent) {
+// applyStatusEvent 落库一条增量状态事件。返回的错误表示落库失败：调用方应结束会话，
+// 让下一次连接按水位（max(row_id)）把这条事件重放回来——吞掉错误继续处理的话，
+// 后续事件会把水位推过去，这条状态变化就永久丢了。
+func applyStatusEvent(deps DownstreamDeps, evt *syncpb.RelayStatusEvent) error {
 	if evt == nil {
-		return
+		return nil
 	}
 	stationID, err := uuid.Parse(evt.StationId)
 	if err != nil {
-		return
+		return nil // 无法识别的帧，跳过
 	}
 
 	if evt.ItemName == "" {
 		evtChangedAt := custype.UnixMs(evt.ChangedAtUnixMs)
-		if changed, err := deps.Store.UpdateStationStatus(stationID, evt.Status, evtChangedAt.ToTime()); err == nil && changed {
+		changed, err := deps.Store.UpdateStationStatus(stationID, evt.Status, evtChangedAt.ToTime())
+		if err != nil {
+			return fmt.Errorf("update station status: %w", err)
+		}
+		if changed {
 			deps.Notifier.PublishStatus(MsgUpdateStationStatus, common.StationStatusStruct{
 				StationId:          stationID,
 				Identifier:         evt.Identifier,
 				StatusChangeStruct: common.StatusChangeStruct{Status: evt.Status, ChangedAt: custype.UnixMs(evt.ChangedAtUnixMs)},
 			})
 		}
-		return
+		return nil
 	}
 
 	statusLog := common.RowIdItemStatusStruct{
@@ -407,32 +434,39 @@ func applyStatusEvent(deps DownstreamDeps, evt *syncpb.RelayStatusEvent) {
 			},
 		},
 	}
-	if inserted, err := deps.Store.UpdateAndSaveStatusLog(stationID, statusLog.RowId, statusLog.ItemName, statusLog.Status, statusLog.ChangedAt.ToTime()); err == nil && inserted {
+	inserted, err := deps.Store.UpdateAndSaveStatusLog(stationID, statusLog.RowId, statusLog.ItemName, statusLog.Status, statusLog.ChangedAt.ToTime())
+	if err != nil {
+		return fmt.Errorf("save item status log: %w", err)
+	}
+	if inserted {
 		deps.Notifier.PublishStatus(MsgUpdateItemStatus, common.FullItemStatusStruct{
 			StationId:             stationID,
 			Identifier:            evt.Identifier,
 			RowIdItemStatusStruct: statusLog,
 		})
 	}
+	return nil
 }
 
-func applyDataBatch(deps DownstreamDeps, batch *syncpb.RelayDataBatch) {
+// applyDataBatch 落库一批数据点。返回的错误表示落库失败，处理方式同 applyStatusEvent：
+// 结束会话，由下一次连接按每个 item 的 max(timestamp) 水位重放。
+func applyDataBatch(deps DownstreamDeps, batch *syncpb.RelayDataBatch) error {
 	if batch == nil || batch.StationId == "" || len(batch.Points) == 0 {
-		return
+		return nil
 	}
 	stationID, err := uuid.Parse(batch.StationId)
 	if err != nil {
-		return
+		return nil // 无法识别的帧，跳过
 	}
 
 	for _, point := range batch.Points {
 		if err = deps.Store.EnsureDataTable(point.ItemName); err != nil {
-			return
+			return fmt.Errorf("ensure data table %q: %w", point.ItemName, err)
 		}
 		tm := custype.UnixMs(point.UnixMs)
 		inserted, saveErr := deps.Store.SaveDataHistory(stationID, point.ItemName, point.Value, tm.ToTime())
 		if saveErr != nil {
-			return
+			return fmt.Errorf("save data point for %q: %w", point.ItemName, saveErr)
 		}
 		if !inserted {
 			continue
@@ -450,4 +484,5 @@ func applyDataBatch(deps DownstreamDeps, batch *syncpb.RelayDataBatch) {
 		}
 		deps.Notifier.PublishData(stationItem, data, point.Kind == syncpb.DataKind_DATA_KIND_GPIO)
 	}
+	return nil
 }

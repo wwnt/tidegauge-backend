@@ -28,9 +28,17 @@ This directory is the wire-contract source for both Sync V2 links:
 `pkg/pb/syncproto` is the generated Go package. `internal/syncv2` is the shared runtime helper package. Keep those names distinct in docs and code review.
 
 ## Generation command
+
+Generate with the `protoc-gen-go` version that matches the `google.golang.org/protobuf`
+runtime in `go.mod` (currently v1.36.11). An older plugin still produces code that compiles,
+but it rewrites the whole file and buries the real change in the diff.
+
 ```powershell
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
 protoc --go_out=. --go_opt=module=tide proto/sync/v2/sync_v2.proto
 ```
+
+The first lines of `pkg/pb/syncproto/sync_v2.pb.go` record the plugin version that was used.
 
 ## Compatibility notes
 

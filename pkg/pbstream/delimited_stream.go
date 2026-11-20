@@ -2,8 +2,10 @@ package pbstream
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"sync"
+	"time"
 
 	"google.golang.org/protobuf/encoding/protodelim"
 	"google.golang.org/protobuf/proto"
@@ -44,6 +46,21 @@ func (s *DelimitedStream) Close() error {
 	return s.conn.Close()
 }
 
+// ErrDeadlineNotSupported 表示底层连接不支持读超时。
+var ErrDeadlineNotSupported = errors.New("pbstream: underlying connection does not support read deadlines")
+
+// SetReadDeadline 给后续以及正在阻塞中的 Recv 设置截止时间；零值表示取消。
+//
+// 需要它的原因：Close 不一定能打断阻塞中的 Recv——底层是 yamux 流时，Close 只是
+// 半关闭（停止本端写），本端的读会一直等到对端关闭。要从另一个 goroutine 中止
+// Recv，应当设置一个已经过去的截止时间。
+func (s *DelimitedStream) SetReadDeadline(t time.Time) error {
+	if d, ok := s.conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+		return d.SetReadDeadline(t)
+	}
+	return ErrDeadlineNotSupported
+}
+
 // TypedDelimitedStream provides strongly-typed Send/Recv helpers on top of DelimitedStream.
 type TypedDelimitedStream[T proto.Message] struct {
 	raw    *DelimitedStream
@@ -72,4 +89,9 @@ func (s *TypedDelimitedStream[T]) Recv() (T, error) {
 
 func (s *TypedDelimitedStream[T]) Close() error {
 	return s.raw.Close()
+}
+
+// SetReadDeadline 见 DelimitedStream.SetReadDeadline。
+func (s *TypedDelimitedStream[T]) SetReadDeadline(t time.Time) error {
+	return s.raw.SetReadDeadline(t)
 }

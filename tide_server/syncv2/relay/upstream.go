@@ -52,11 +52,18 @@ func (s *UpstreamServer) StreamRelay(ctx context.Context, stream internalsyncv2.
 		log.Error("v2 upstream: failed to get user info", "username", username, "error", err)
 		return fmt.Errorf("failed to get user info: %w", err)
 	}
-	if user.Role == auth.NormalUser {
+	if user.Role < auth.NormalUser {
+		return errors.New("account is disabled")
+	}
+	// 只有管理员不受权限表限制；nil 表示不过滤，所以非管理员必须拿到非 nil 的权限表。
+	if user.Role < auth.Admin {
 		permissions, err = s.Auth.Permission.GetPermissions(username)
 		if err != nil {
 			log.Error("v2 upstream: failed to get permissions", "username", username, "error", err)
 			return fmt.Errorf("failed to get user permissions: %w", err)
+		}
+		if permissions == nil {
+			permissions = common.UUIDStringsMap{}
 		}
 	}
 
@@ -315,23 +322,29 @@ func (s *UpstreamServer) handleMissDataSync(stream internalsyncv2.RelayMessageSt
 				continue
 			}
 
-			var points []*syncpb.DataPoint
-			for _, d := range ds {
-				points = append(points, &syncpb.DataPoint{
-					ItemName: itemName,
-					Value:    d.Value,
-					UnixMs:   d.Millisecond.ToInt64(),
-					Kind:     syncpb.DataKind_DATA_KIND_NORMAL,
-				})
-			}
-			if err := sendFrame(&syncpb.RelayMessage{Body: &syncpb.RelayMessage_DataBatch{
-				DataBatch: &syncpb.RelayDataBatch{
-					StationId: stationID.String(),
-					DataType:  MsgMissData,
-					Points:    points,
-				},
-			}}); err != nil {
-				return err
+			// 按批发送：一个 item 的积压可能有上百万个点，整包发送会超过对端的帧上限
+			// （32 MiB），对端每次重连都会在同一帧上失败，永远追不上。
+			// 下游按"读到空批为止"循环接收，分成多帧是兼容的。
+			for start := 0; start < len(ds); start += missDataBatchSize {
+				chunk := ds[start:min(start+missDataBatchSize, len(ds))]
+				points := make([]*syncpb.DataPoint, 0, len(chunk))
+				for _, d := range chunk {
+					points = append(points, &syncpb.DataPoint{
+						ItemName: itemName,
+						Value:    d.Value,
+						UnixMs:   d.Millisecond.ToInt64(),
+						Kind:     syncpb.DataKind_DATA_KIND_NORMAL,
+					})
+				}
+				if err := sendFrame(&syncpb.RelayMessage{Body: &syncpb.RelayMessage_DataBatch{
+					DataBatch: &syncpb.RelayDataBatch{
+						StationId: stationID.String(),
+						DataType:  MsgMissData,
+						Points:    points,
+					},
+				}}); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -340,3 +353,6 @@ func (s *UpstreamServer) handleMissDataSync(stream internalsyncv2.RelayMessageSt
 		DataBatch: &syncpb.RelayDataBatch{},
 	}})
 }
+
+// missDataBatchSize 是补数阶段单帧携带的数据点上限（每个点编码后约 20~40 字节）。
+const missDataBatchSize = 4096

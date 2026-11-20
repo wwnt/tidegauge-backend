@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"tide/common"
@@ -23,11 +24,18 @@ type Server struct {
 	InfoSyncer InfoSyncer
 	Notifier   Notifier
 	Logger     *slog.Logger
+	// HandshakeTimeout 覆盖默认的握手时限（defaultHandshakeTimeout）；零值表示用默认值。
+	HandshakeTimeout time.Duration
 
 	reg registry
 }
 
 var ErrStationNotConnected = errors.New("station not connected")
+
+// defaultHandshakeTimeout 是从连接建立到握手完成（服务端发出 StatusLatest）的时限。
+// 握手阶段的每一步都在等对端的下一帧；没有时限的话，一个只发 ClientHello 就不再
+// 说话的对端会一直占着该站点的登记槽位，真正的站点会被"station already connected"拒之门外。
+const defaultHandshakeTimeout = 60 * time.Second
 
 type commandStreamOpener func() (internalsyncv2.StationMessageStream, error)
 
@@ -47,6 +55,14 @@ func (s *Server) StreamStation(ctx context.Context, stream internalsyncv2.Statio
 		log = slog.Default()
 	}
 
+	// 握手阶段给读操作设截止时间：超时后阻塞中的 Recv 返回错误，本函数随之退出并释放
+	// 登记槽位。不能靠关闭流来打断——yamux 流的 Close 只是半关闭，不会唤醒本端的读。
+	handshakeTimeout := s.HandshakeTimeout
+	if handshakeTimeout <= 0 {
+		handshakeTimeout = defaultHandshakeTimeout
+	}
+	_ = stream.SetReadDeadline(time.Now().Add(handshakeTimeout))
+
 	hello, err := recvHello(stream)
 	if err != nil {
 		return err
@@ -57,7 +73,7 @@ func (s *Server) StreamStation(ctx context.Context, stream internalsyncv2.Statio
 		return fmt.Errorf("station not found: %w", err)
 	}
 
-	conn := newStationConn(openCommandStream, ctx.Done())
+	conn := newStationConn(openCommandStream, ctx.Done(), stream)
 	if _, loaded := s.reg.LoadOrStore(stationID, conn); loaded {
 		return errors.New("station already connected")
 	}
@@ -120,10 +136,20 @@ func (s *Server) StreamStation(ctx context.Context, stream internalsyncv2.Statio
 	}}); err != nil {
 		return err
 	}
+	// 握手完成，取消读截止时间；之后的空闲由 yamux keepalive 负责探测。
+	// 取消之后再检查一次断开标记：Disconnect 可能刚好在握手期间设置过"立即超时"，
+	// 不检查的话会被这里的取消覆盖掉。
+	_ = stream.SetReadDeadline(time.Time{})
+	if conn.disconnected.Load() {
+		return errStationDisconnected
+	}
 
 	for {
 		frame, recvErr := stream.Recv()
 		if recvErr != nil {
+			if conn.disconnected.Load() {
+				return errStationDisconnected
+			}
 			return recvErr
 		}
 
@@ -160,6 +186,20 @@ func (s *Server) RequestSnapshot(stationID uuid.UUID, cameraName string, timeout
 		return nil, ErrStationNotConnected
 	}
 	return conn.requestSnapshot(cameraName, timeout)
+}
+
+// Disconnect 断开指定站点当前的 v2 连接（站点被删除时调用）。站点未连接时是空操作。
+// 返回是否确实有连接被断开。
+func (s *Server) Disconnect(stationID uuid.UUID) bool {
+	if s == nil {
+		return false
+	}
+	conn, ok := s.reg.Load(stationID)
+	if !ok {
+		return false
+	}
+	conn.close()
+	return true
 }
 
 func (s *Server) updateStationStatusAndNotify(stationID uuid.UUID, identifier string, status common.Status) error {
@@ -354,16 +394,29 @@ func pbToItemStatusLog(msg *syncpb.ItemStatusLog) common.RowIdItemStatusStruct {
 	}
 }
 
+var errStationDisconnected = errors.New("station disconnected by server")
+
 type stationConn struct {
 	openCommandStream commandStreamOpener
 	done              <-chan struct{}
+	mainStream        internalsyncv2.StationMessageStream
+	// disconnected 由 close 置位，StreamStation 据此区分"被服务端断开"和普通的读错误。
+	disconnected atomic.Bool
 }
 
-func newStationConn(openCommandStream commandStreamOpener, done <-chan struct{}) *stationConn {
+func newStationConn(openCommandStream commandStreamOpener, done <-chan struct{}, mainStream internalsyncv2.StationMessageStream) *stationConn {
 	return &stationConn{
 		openCommandStream: openCommandStream,
 		done:              done,
+		mainStream:        mainStream,
 	}
+}
+
+// close 让 StreamStation 的接收循环立即退出（调用方随后会关闭整个会话）。
+// 用"已过期的读截止时间"而不是 Close：yamux 流的 Close 不会唤醒阻塞中的读。
+func (c *stationConn) close() {
+	c.disconnected.Store(true)
+	_ = c.mainStream.SetReadDeadline(time.Now())
 }
 
 func (c *stationConn) requestSnapshot(cameraName string, timeout time.Duration) ([]byte, error) {

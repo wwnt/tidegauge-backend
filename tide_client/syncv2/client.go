@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"sync"
 
@@ -110,11 +109,9 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	netConn, ok := conn.(net.Conn)
-	if !ok {
-		return errors.New("upgrade connection is not net.Conn")
-	}
-	return c.runOnConn(ctx, netConn)
+	// 升级后的连接是 net/http 的 101 响应体：它只实现 io.ReadWriteCloser，不是 net.Conn
+	// （此前这里做 net.Conn 断言，对真实服务器必然失败）。yamux 只需要 io.ReadWriteCloser。
+	return c.runOnConn(ctx, conn)
 }
 
 func (c *Client) logger() *slog.Logger {
