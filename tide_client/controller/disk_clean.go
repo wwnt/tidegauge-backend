@@ -26,6 +26,13 @@ func CheckFtpConfig(ftp global.Ftp) (bool, error) {
 // scheduleRemoveOutdatedData 装订磁盘与数据库的保留期清理：启动即跑一次，之后每日一次。
 // dataItemNames 是本站全部数据项（即 SQLite 数据表名）。
 func scheduleRemoveOutdatedData(dataItemNames []string) {
+	// db.hold_days 缺省为 0 时 cutoff 就是"现在"，每次清理都会删光全部数据和状态日志；
+	// 与 FTP 的 hold_days 一样在启动时拒绝，而不是悄悄清库。
+	if global.Config.Db.HoldDays < 1 {
+		slog.Error("Invalid config: db.hold_days must be >= 1", "hold_days", global.Config.Db.HoldDays)
+		os.Exit(1)
+	}
+
 	var ftps = []global.Ftp{global.Config.Cameras.Ftp, global.Config.Gnss.Ftp}
 	var validFtps []global.Ftp
 	for _, ftp := range ftps {
@@ -39,7 +46,11 @@ func scheduleRemoveOutdatedData(dataItemNames []string) {
 	}
 	// data.db 所在盘也在监控范围内：时序数据与状态日志是主要的磁盘增长源，
 	// 而纯数据站（未配置 cameras/gnss）原本没有任何磁盘余量检查。
+	// 相对路径的 DSN 得到 "."，即进程工作目录。
 	dbDir, dbDirOk := db.PathFromDSN(global.Config.Db.Dsn)
+	if !dbDirOk {
+		slog.Warn("Database directory unknown, free-space check for data.db is disabled", "dsn", global.Config.Db.Dsn)
+	}
 
 	removeOutdatedDataJob := func() {
 		for _, ftp := range validFtps {

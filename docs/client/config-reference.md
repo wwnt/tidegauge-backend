@@ -59,6 +59,7 @@ If omitted, the process falls back to the CLI default.
 ## listen
 
 Http service listening address, used to provide pprof service, only useful to developers.
+Leave it out to disable the listener.
 
 ## server
 
@@ -96,9 +97,14 @@ devices or filesystems that do not reliably flush writes to persistent media.
 
 The number of days (integer) to keep time-series data in the local SQLite database.
 The sample configuration defaults to `90`, which is about 3 months.
+The value is required and must be at least `1`; the client refuses to start without it
+(a missing value used to mean "delete everything at every cleanup").
 
 Cleanup runs at startup and daily, deleting expired time-series rows and status logs,
-including rows in data tables left behind by renamed or removed items. SQLite can
+including rows in data tables left behind by renamed or removed items. The newest
+status-log row of every item is always kept, whatever its age: it is the item's current
+status, and keeping it stops SQLite from reusing row ids that the server has already seen.
+SQLite can
 reuse space freed by deletions for later inserts, so deleting rows does not
 necessarily shrink the database file.
 

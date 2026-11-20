@@ -2,6 +2,7 @@ package device
 
 import (
 	"log/slog"
+	"maps"
 	"os"
 	"strings"
 )
@@ -57,7 +58,10 @@ func MergeInfo(dstInfo map[string]map[string]string, srcInfo map[string]map[stri
 				}
 			}
 		} else {
-			dstInfo[deviceName] = srcItems
+			// 必须拷贝：srcItems 往往就是驱动自己的 conf.Items，驱动的 cron 任务会遍历它。
+			// 直接存引用的话，之后同名 device 合并进来的其他驱动的 item 会混进这张表，
+			// 该驱动每个周期都会为不属于自己的 item 上报一次"缺失读数"。
+			dstInfo[deviceName] = maps.Clone(srcItems)
 		}
 	}
 }

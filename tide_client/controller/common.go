@@ -3,6 +3,7 @@ package controller
 import (
 	"encoding/json"
 	"log/slog"
+	"math"
 	"os"
 	"sort"
 	"sync"
@@ -47,9 +48,13 @@ func Init() {
 	stationInfo.Identifier = global.Config.Identifier
 
 	itemNames := addDevices()
-	scheduleRemoveOutdatedData(itemNames)
 
+	// 消费者必须先于启动期清理运行：addDevices 之后各设备的 cron 任务已经开始往
+	// device.DataReceive（容量 2000）里投递，而首次清理（旧积压的状态日志、FTP 目录遍历）
+	// 可能持续数分钟；没人消费时通道写满，采集任务会阻塞并跳过后续周期，造成数据缺口。
 	go receiveData(dataBroker)
+
+	scheduleRemoveOutdatedData(itemNames)
 
 	addRpiStatus(dataBroker)
 
@@ -151,6 +156,13 @@ func receiveData(dataBroker *pubsub.Broker) {
 					at = custype.ToUnixMs(time.Now())
 				}
 
+				// NaN/±Inf 不是有效读数：按缺失处理（状态记为异常、不落库）。±Inf 一旦写进
+				// SQLite，之后每次 v1 重放都会在 JSON 编码时失败，站点将一直无法同步。
+				if data.Value != nil && (math.IsNaN(*data.Value) || math.IsInf(*data.Value, 0)) {
+					slog.Warn("Discarding non-finite reading", "item_name", data.ItemName, "value", *data.Value)
+					data.Value = nil
+				}
+
 				if data.Typ == common.MsgData {
 					// 缺失读数（nil）视为异常，有读数则视为正常；
 					// 状态翻转时落库并广播，未翻转则跳过。
@@ -182,11 +194,13 @@ func receiveData(dataBroker *pubsub.Broker) {
 
 // maybeFlipItemStatus 在 item 的状态与缓存不同（即发生翻转）时，把新状态写入
 // item_status_log 并发布到 broker；未翻转则什么都不做。必须在持有 ingestMu 时调用。
+//
+// 缓存只在落库成功后更新：落库失败（例如清理任务正占着写锁）时缓存保持旧值，
+// 下一条读数会再次判定为翻转并重试，这次翻转不会被永久吞掉。
 func maybeFlipItemStatus(dataBroker *pubsub.Broker, itemName string, at custype.UnixMs, status common.Status) {
 	if itemsStatus[itemName].Status == status {
 		return
 	}
-	itemsStatus[itemName] = common.StatusChangeStruct{Status: status, ChangedAt: at}
 	rowId, err := db.SaveItemStatusLog(itemName, status, at.ToInt64())
 	if err != nil {
 		slog.Error("Failed to save item status log",
@@ -195,6 +209,7 @@ func maybeFlipItemStatus(dataBroker *pubsub.Broker, itemName string, at custype.
 			"error", err)
 		return
 	}
+	itemsStatus[itemName] = common.StatusChangeStruct{Status: status, ChangedAt: at}
 	dataBroker.Publish(common.SendMsgStruct{Type: common.MsgItemStatus,
 		Body: common.RowIdItemStatusStruct{
 			RowId:            rowId,

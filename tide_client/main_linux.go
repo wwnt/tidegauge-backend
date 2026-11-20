@@ -23,11 +23,16 @@ func init() {
 
 func main() {
 	controller.Init()
-	go func() {
-		err := http.ListenAndServe(global.Config.Listen, nil)
-		slog.Error("HTTP server exited", "error", err)
-		os.Exit(1)
-	}()
+	// 这个监听只提供 pprof 调试端点，与采集无关：没配置就不启动（空地址会去绑 :80，
+	// 普通用户必然失败），绑定失败也只记日志，不能因此让采集进程退出重启。
+	if global.Config.Listen == "" {
+		slog.Info("Debug HTTP listener disabled: listen is not configured")
+	} else {
+		go func() {
+			err := http.ListenAndServe(global.Config.Listen, nil)
+			slog.Error("Debug HTTP listener exited", "listen", global.Config.Listen, "error", err)
+		}()
+	}
 	waitAndCleanUp()
 }
 

@@ -26,6 +26,9 @@ var onvifSnapshot = camera.OnvifSnapshot
 func client(dataBroker *pubsub.Broker) {
 	conn, err := net.DialTimeout("tcp", global.Config.Server, 30*time.Second)
 	if err != nil {
+		// 重连有退避（10s 起、上限 10 分钟），这里记一条不会刷屏；
+		// 不记的话 server 地址配错时日志里没有任何线索。
+		slog.Warn("Failed to connect to server", "server", global.Config.Server, "error", err)
 		return
 	}
 	defer func() { _ = conn.Close() }()
@@ -138,6 +141,13 @@ func stationConn(conn net.Conn, dataBroker *pubsub.Broker) {
 			}
 			go func() {
 				defer func() { _ = stream.Close() }()
+				// 命令流里要解析对端（摄像头）返回的内容，任何 panic 都只应结束这一条流，
+				// 不能带垮整个采集进程。
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("Station command stream panicked", "panic", r)
+					}
+				}()
 				var buf = make([]byte, 1)
 				if _, err = stream.Read(buf); err != nil {
 					slog.Error("Failed to read stream data", "error", err)
@@ -175,6 +185,9 @@ func cameraSnapshot(conn net.Conn) {
 // newSubscriber creates a subscriber. A goroutine reads values from Messages
 // and passes them to write until ctx is canceled, the subscriber is closed,
 // or write returns an error.
+//
+// write 失败时调用 cancel 结束整个会话：只退出转发 goroutine 的话，yamux 会话还活着，
+// 站点看起来在线却不再上传任何实时数据；断开后重连会从水位重放，不丢数据。
 func newSubscriber(ctx context.Context, cancel context.CancelFunc, write func(any) error) *pubsub.Subscriber {
 	subscriber := pubsub.NewSubscriber(1000, cancel)
 	go func() {
@@ -186,7 +199,11 @@ func newSubscriber(ctx context.Context, cancel context.CancelFunc, write func(an
 				if !ok {
 					return
 				}
-				if write(val) != nil {
+				if err := write(val); err != nil {
+					if ctx.Err() == nil {
+						slog.Warn("Failed to forward message to server, closing sync session", "error", err)
+					}
+					cancel()
 					return
 				}
 			}

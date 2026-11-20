@@ -13,26 +13,29 @@ import (
 )
 
 func addRpiStatus(dataBroker *pubsub.Broker) {
-	if _, err := rpiStat(); err == nil {
-		_, err = global.CronJob.AddFunc("@every 60s",
-			func() {
-				data, err := rpiStat()
-				if err != nil {
-					slog.Error("Failed to get raspberry pi status", "error", err)
-					return
-				}
-				dataBroker.Publish(common.SendMsgStruct{
-					Type: common.MsgRpiStatus,
-					Body: common.RpiStatusTimeStruct{
-						RpiStatusStruct: data,
-						Millisecond:     custype.ToUnixMs(time.Now()),
-					}}, nil)
-			},
-		)
-		if err != nil {
-			slog.Error("Failed to add raspberry pi status cron job", "error", err)
-			os.Exit(1)
-		}
+	if _, err := rpiStat(); err != nil {
+		// 非树莓派或未安装 vcgencmd：不上报 CPU 温度，但要留一条日志说明原因。
+		slog.Info("Raspberry Pi status reporting disabled: vcgencmd probe failed", "error", err)
+		return
+	}
+	_, err := global.CronJob.AddFunc("@every 60s",
+		func() {
+			data, err := rpiStat()
+			if err != nil {
+				slog.Error("Failed to get raspberry pi status", "error", err)
+				return
+			}
+			dataBroker.Publish(common.SendMsgStruct{
+				Type: common.MsgRpiStatus,
+				Body: common.RpiStatusTimeStruct{
+					RpiStatusStruct: data,
+					Millisecond:     custype.ToUnixMs(time.Now()),
+				}}, nil)
+		},
+	)
+	if err != nil {
+		slog.Error("Failed to add raspberry pi status cron job", "error", err)
+		os.Exit(1)
 	}
 }
 

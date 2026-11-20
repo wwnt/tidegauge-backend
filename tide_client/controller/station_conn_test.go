@@ -141,6 +141,11 @@ func Test_stationConn_OverflowClosesSession(t *testing.T) {
 	err = decoder.Decode(&missStatusLogs)
 	require.NoError(t, err)
 
+	// 重放数据写出后，stationConn 还要在同一临界区里完成订阅；拿一次 ingestMu
+	// 等它退出临界区，否则下面的消息可能发布给一个还没有订阅者的 broker。
+	ingestMu.Lock()
+	ingestMu.Unlock()
+
 	msg := common.SendMsgStruct{
 		Type: common.MsgData,
 		Body: common.ItemNameDataTimeStruct{

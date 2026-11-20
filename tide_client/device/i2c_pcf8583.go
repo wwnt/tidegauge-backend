@@ -2,6 +2,7 @@ package device
 
 import (
 	"encoding/json"
+	"log/slog"
 	"tide/common"
 	"tide/pkg"
 
@@ -34,15 +35,24 @@ func (pcf8583) NewI2CDevice(bus i2c.Bus, rawConf json.RawMessage) common.StringM
 
 	pkg.Must(json.Unmarshal(rawConf, &conf))
 	d := i2c.Dev{Bus: bus, Addr: conf.Addr >> 1} //Saves device, prevents having to specify address everytime. ">> 1" convert to 7 bit.
-	_ = setRegister(d, locationControl, modeEventCounter)
-	_ = setCount(d, 0) // Reset counter at startup
+	if err := setRegister(d, locationControl, modeEventCounter); err != nil {
+		slog.Error("Failed to switch PCF8583 to event counter mode", "item_name", conf.ItemName, "error", err)
+	}
+	if err := setCount(d, 0); err != nil { // Reset counter at startup
+		slog.Error("Failed to reset PCF8583 counter at startup", "item_name", conf.ItemName, "error", err)
+	}
 	var job = func() *float64 {
 		cnt, err := getCount(d)
 		if err != nil {
+			slog.Error("Failed to read PCF8583 counter", "item_name", conf.ItemName, "error", err)
 			return nil
 		}
 		if conf.ResetC {
-			_ = setCount(d, 0)
+			// 清零失败时本周期的计数会在下个周期被重复上报，而且 setCount 中途失败
+			// 可能让芯片停在"停止计数"状态，必须留下日志。
+			if err = setCount(d, 0); err != nil {
+				slog.Error("Failed to reset PCF8583 counter, next reading will include this period again", "item_name", conf.ItemName, "error", err)
+			}
 		}
 		// The hardware counter increments twice per mechanical tip, so the code converts count to rainfall with 0.2 mm/tip.
 		return new(float64(cnt*2) / 10)

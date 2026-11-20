@@ -21,6 +21,15 @@ const cleanStatusLogBatchSize = 1000
 // CleanItemStatusLog 删除 changed_at 早于 cutoffTime（unix ms）的状态日志。
 // 状态日志的列结构与数据表不同，由本函数单独清理，调用方（CleanDBData）无需做表结构探测。
 //
+// 每个 item 最新的一行（rowid 最大者）无论多旧都保留，原因有二：
+//
+//  1. 它是该 item 的"当前状态"。重启时 GetItemsLatestStatus 靠它恢复状态缓存；删掉后
+//     每个 item 的第一条读数都会被当成一次状态翻转，并盖上重启时刻的时间戳。
+//  2. 表没有 AUTOINCREMENT，SQLite 分配的新 rowid 是 max(rowid)+1。全表最大 rowid 那行
+//     必然是某个 item 的最新行，保留它就保证 rowid 单调不回退。服务端以
+//     (station_id, row_id) 为主键并且 "on conflict do nothing"，rowid 一旦复用，
+//     新的状态变化会被服务端当成已有行静默丢弃。
+//
 // 批删用 rowid 子查询而不是 "delete ... limit ?"：SQLite 对 DELETE 的 LIMIT 支持是
 // 编译期可选语法（parse.y 的 where_opt_ret 规则带不带 limit_opt 分支），mattn/go-sqlite3
 // 的 amalgamation（sqlite3-binding.c，SQLite 3.53.0）里的语法表预生成时就没带 LIMIT
@@ -37,8 +46,14 @@ func CleanItemStatusLog(cutoffTime int64) error {
 	}
 
 	for {
+		// exists 子查询走 item_name 索引（索引项自带 rowid），判断"同一 item 还有更新的行"
+		// 是一次索引定位；被保留的行每批会被重新扫到，但数量不超过 item 个数。
 		res, err := db.Exec(`delete from item_status_log where rowid in (
-			select rowid from item_status_log where changed_at < ? limit ?)`,
+			select old.rowid from item_status_log as old
+			where old.changed_at < ?
+			  and exists (select 1 from item_status_log as newer
+			              where newer.item_name = old.item_name and newer.rowid > old.rowid)
+			limit ?)`,
 			cutoffTime, cleanStatusLogBatchSize)
 		if err != nil {
 			return fmt.Errorf("failed to delete status log: %w", err)
