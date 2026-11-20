@@ -1,6 +1,8 @@
 module tide
 
-go 1.26
+go 1.26.0
+
+toolchain go1.26.11
 
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
@@ -18,7 +20,7 @@ require (
 	github.com/warthog618/go-gpiocdev v0.9.1
 	github.com/wwnt/modbus v0.1.1
 	go.bug.st/serial v1.6.4
-	golang.org/x/crypto v0.50.0
+	golang.org/x/crypto v0.58.0
 	google.golang.org/protobuf v1.36.11
 	periph.io/x/conn/v3 v3.7.3
 	periph.io/x/devices/v3 v3.7.4
@@ -39,9 +41,9 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/segmentio/ksuid v1.0.4 // indirect
-	golang.org/x/net v0.52.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

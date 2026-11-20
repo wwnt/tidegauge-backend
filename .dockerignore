@@ -1,0 +1,23 @@
+# The image is built with the repository root as context (`COPY . .`).
+# Keep VCS data, local configs with real credentials, databases and build output out of it.
+.git
+.idea
+.vscode
+.notes
+.claude
+
+tide_server/config*.json
+!tide_server/config.template.json
+tide_server/docker-compose.yml
+tide_server/tide_server
+tide_server/tide_server.exe
+tide_server/lastActive
+
+tide_client/config.json
+tide_client/configs/
+tide_client/configs_backup/
+tide_client/tide_client
+tide_client/data.db*
+
+**/*.exe
+**/*.log
