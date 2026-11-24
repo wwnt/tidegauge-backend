@@ -2,8 +2,8 @@ package permission
 
 import (
 	"database/sql"
+
 	"github.com/google/uuid"
-	"tide/common"
 )
 
 type PG struct {
@@ -20,35 +20,36 @@ func (p *PG) CheckPermission(username string, stationId uuid.UUID, itemName stri
 		return false
 	}
 	rowsAffected, err := res.RowsAffected()
-	if err == nil && rowsAffected > 0 {
-		return true
-	} else {
-		return false
-	}
+	return err == nil && rowsAffected > 0
 }
 
 func (p *PG) GetPermissions(username string) (map[uuid.UUID][]string, error) {
-	rows, err := p.Query("select station_id, item_name from permissions_item_data where username=$1", username)
+	return p.queryScopes("select station_id, item_name from permissions_item_data where username=$1", username)
+}
+
+// queryScopes runs a query returning (station_id, name) rows and groups the
+// names by station.
+func (p *PG) queryScopes(query string, username string) (map[uuid.UUID][]string, error) {
+	rows, err := p.Query(query, username)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var (
-		stationId uuid.UUID
-		itemName  string
-		scope     = make(common.UUIDStringsMap)
-	)
+	scopes := make(map[uuid.UUID][]string)
 	for rows.Next() {
-		err = rows.Scan(&stationId, &itemName)
-		if err != nil {
+		var (
+			stationId uuid.UUID
+			name      string
+		)
+		if err = rows.Scan(&stationId, &name); err != nil {
 			return nil, err
 		}
-		scope[stationId] = append(scope[stationId], itemName)
+		scopes[stationId] = append(scopes[stationId], name)
 	}
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-	return scope, nil
+	return scopes, nil
 }
 
 func (p *PG) EditPermission(username string, scopes map[uuid.UUID][]string) error {
@@ -79,35 +80,11 @@ func (p *PG) CheckCameraStatusPermission(username string, stationId uuid.UUID, n
 		return false
 	}
 	rowsAffected, err := res.RowsAffected()
-	if err == nil && rowsAffected > 0 {
-		return true
-	} else {
-		return false
-	}
+	return err == nil && rowsAffected > 0
 }
 
 func (p *PG) GetCameraStatusPermissions(username string) (map[uuid.UUID][]string, error) {
-	rows, err := p.Query("select station_id, camera_name from permissions_camera_status where username=$1", username)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		stationId  uuid.UUID
-		cameraName string
-		scopes     = make(map[uuid.UUID][]string)
-	)
-	for rows.Next() {
-		err = rows.Scan(&stationId, &cameraName)
-		if err != nil {
-			return nil, err
-		}
-		scopes[stationId] = append(scopes[stationId], cameraName)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return scopes, nil
+	return p.queryScopes("select station_id, camera_name from permissions_camera_status where username=$1", username)
 }
 
 func (p *PG) EditCameraStatusPermission(username string, scopes map[uuid.UUID][]string) error {

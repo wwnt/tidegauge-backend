@@ -9,26 +9,27 @@ import (
 
 // listUsersFromDB queries users table and returns matching users according to condition.
 // condition: -1 => role <= role, 0 => role == role, 1 => role >= role
-func listUsersFromDB(db *sql.DB, condition int, role int) (users []auth.User, err error) {
-	var rows *sql.Rows
+func listUsersFromDB(db *sql.DB, condition int, role int) ([]auth.User, error) {
+	var op string
 	switch condition {
 	case -1:
-		rows, err = db.Query("select username, role, email, live_camera from users where role <= $1", role)
+		op = "<="
 	case 0:
-		rows, err = db.Query("select username, role, email, live_camera from users where role = $1", role)
+		op = "="
 	case 1:
-		rows, err = db.Query("select username, role, email, live_camera from users where role >= $1", role)
+		op = ">="
 	default:
 		return nil, nil
 	}
+	rows, err := db.Query("select username, role, email, live_camera from users where role "+op+" $1", role)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var user auth.User
+	var users []auth.User
 	for rows.Next() {
-		err = rows.Scan(&user.Username, &user.Role, &user.Email, &user.LiveCamera)
-		if err != nil {
+		var user auth.User
+		if err = rows.Scan(&user.Username, &user.Role, &user.Email, &user.LiveCamera); err != nil {
 			return nil, err
 		}
 		users = append(users, user)
