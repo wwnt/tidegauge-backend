@@ -366,7 +366,7 @@ func TestServer_StreamStation_HandshakeAndLatest(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func TestServer_RequestSnapshot_RoundTrip(t *testing.T) {
@@ -419,7 +419,7 @@ func TestServer_RequestSnapshot_RoundTrip(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func TestServer_RequestSnapshot_EmptyResponseError(t *testing.T) {
@@ -465,7 +465,7 @@ func TestServer_RequestSnapshot_EmptyResponseError(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func TestServer_RequestSnapshot_ConcurrentSubstreams(t *testing.T) {
@@ -569,7 +569,7 @@ func TestServer_RequestSnapshot_ConcurrentSubstreams(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func TestServer_StreamStation_DataBatchReplayVsRealtime(t *testing.T) {
@@ -640,7 +640,7 @@ func TestServer_StreamStation_DataBatchReplayVsRealtime(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func runHandshakeWithClientStatus(t *testing.T, store *fakeStore, clientLatestRowID, clientChangedAt int64) (latestStatusFromServer int64, errCh <-chan error, sessions *stationSessions, cancel context.CancelFunc) {
@@ -711,7 +711,7 @@ func TestServer_StreamStation_PrunesOnRebuild(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func TestServer_StreamStation_PrunesOnEmptyClient(t *testing.T) {
@@ -731,7 +731,7 @@ func TestServer_StreamStation_PrunesOnEmptyClient(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func TestServer_StreamStation_NoPruneWhenConsistent(t *testing.T) {
@@ -752,7 +752,7 @@ func TestServer_StreamStation_NoPruneWhenConsistent(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func TestServer_StreamStation_PrunesTrailingTail(t *testing.T) {
@@ -774,7 +774,7 @@ func TestServer_StreamStation_PrunesTrailingTail(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 func TestServer_StreamStation_NoPruneWhenClientAhead(t *testing.T) {
@@ -795,5 +795,5 @@ func TestServer_StreamStation_NoPruneWhenClientAhead(t *testing.T) {
 
 	_ = sessions.clientSession.Close()
 	cancel()
-	_ = <-errCh
+	<-errCh
 }

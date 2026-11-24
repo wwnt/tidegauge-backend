@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -304,8 +305,8 @@ func CameraLatestSnapShot(w http.ResponseWriter, r *http.Request) {
 					goto WriteResponse
 				}
 			}
-			for i := len(cachedDirs) - 1; i >= 0; i-- {
-				name := cachedDirs[i].Name()
+			for _, cachedDir := range slices.Backward(cachedDirs) {
+				name := cachedDir.Name()
 				if len(name) != 17 {
 					return
 				}
@@ -346,8 +347,8 @@ func CameraLatestSnapShot(w http.ResponseWriter, r *http.Request) {
 	imgs = imgs[start:]
 
 	var imgsReturn []imgInfo
-	for i := len(imgs) - 1; i >= 0; i-- {
-		file, err := os.Open(path.Join(global.Config.Tide.Camera.Storage, stationID.String(), cameraName, imgs[i]))
+	for _, img := range slices.Backward(imgs) {
+		file, err := os.Open(path.Join(global.Config.Tide.Camera.Storage, stationID.String(), cameraName, img))
 		if err != nil {
 			slog.Error("Failed to open local snapshot", "error", err)
 			return
@@ -361,7 +362,7 @@ func CameraLatestSnapShot(w http.ResponseWriter, r *http.Request) {
 		if info.ModTime().UnixMilli() <= after {
 			break
 		}
-		all, err := os.ReadFile(path.Join(global.Config.Tide.Camera.Storage, stationID.String(), cameraName, imgs[i]))
+		all, err := os.ReadFile(path.Join(global.Config.Tide.Camera.Storage, stationID.String(), cameraName, img))
 		if err != nil {
 			slog.Error("Failed to read local snapshot", "error", err)
 			return

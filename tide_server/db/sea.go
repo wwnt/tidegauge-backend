@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"errors"
 	"tide/common"
 )
@@ -71,26 +72,9 @@ func GetSateAltimetry(tn string) (any, error) {
 	if common.ContainsIllegalCharacter(tn) {
 		return nil, errors.New("Table name contains illegal characters: " + tn)
 	}
-	rows, err := seaDB.Query(`select` + ` lat, lon, sealevel from "` + tn + `"`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		s  SateAltimetry
-		ss []SateAltimetry
-	)
-	for rows.Next() {
-		err = rows.Scan(&s.Lat, &s.Lon, &s.SeaLevel)
-		if err != nil {
-			return nil, err
-		}
-		ss = append(ss, s)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return ss, err
+	return queryAll(seaDB, func(rows *sql.Rows, s *SateAltimetry) error {
+		return rows.Scan(&s.Lat, &s.Lon, &s.SeaLevel)
+	}, `select`+` lat, lon, sealevel from "`+tn+`"`)
 }
 
 type GlossStation struct {
@@ -114,31 +98,14 @@ type Gloss struct {
 }
 
 func GetGlossData() (any, error) {
-	rows, err := TideDB.Query(`SELECT id, name, sga.country, latitude, longitude, latest_psmsl, latest_psmsl_rlr, latest_bodc, latest_sonel, latest_jasl, latest_uhslc_fast, latest_vliz, ioc_code, psmsl_number
-FROM station_info_gloss_all sga left join station_info_gloss on sga.name = station_info_gloss.station`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
 	type glossData struct {
 		Gloss
 		GlossStation
 	}
-	var (
-		s  glossData
-		ss []glossData
-	)
-	for rows.Next() {
-		err = rows.Scan(&s.Id, &s.Name, &s.Country, &s.Latitude, &s.Longitude, &s.LatestPsmsl, &s.LatestPsmslRlr, &s.LatestBodc, &s.LatestSonel, &s.LatestJasl, &s.LatestUhslcFast, &s.LatestVliz, &s.IOCCode, &s.PSMSLNumber)
-		if err != nil {
-			return nil, err
-		}
-		ss = append(ss, s)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return ss, err
+	return queryAll(TideDB, func(rows *sql.Rows, s *glossData) error {
+		return rows.Scan(&s.Id, &s.Name, &s.Country, &s.Latitude, &s.Longitude, &s.LatestPsmsl, &s.LatestPsmslRlr, &s.LatestBodc, &s.LatestSonel, &s.LatestJasl, &s.LatestUhslcFast, &s.LatestVliz, &s.IOCCode, &s.PSMSLNumber)
+	}, `SELECT id, name, sga.country, latitude, longitude, latest_psmsl, latest_psmsl_rlr, latest_bodc, latest_sonel, latest_jasl, latest_uhslc_fast, latest_vliz, ioc_code, psmsl_number
+FROM station_info_gloss_all sga left join station_info_gloss on sga.name = station_info_gloss.station`)
 }
 
 func UpdateStationInfoGlossAll(stations []GlossStation) error {
@@ -173,26 +140,9 @@ type SonelData struct {
 }
 
 func GetSonelData() (any, error) {
-	rows, err := TideDB.Query(`select sta_id, sta_name, sta_acro, sta_type, sta_etat, sta_pays, sta_lon, sta_lat from station_info_tide`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		d  SonelData
-		ds []SonelData
-	)
-	for rows.Next() {
-		err = rows.Scan(&d.StaId, &d.StaName, &d.StaAcro, &d.StaType, &d.StaEtat, &d.StaPays, &d.StaLon, &d.StaLat)
-		if err != nil {
-			return nil, err
-		}
-		ds = append(ds, d)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return ds, err
+	return queryAll(TideDB, func(rows *sql.Rows, d *SonelData) error {
+		return rows.Scan(&d.StaId, &d.StaName, &d.StaAcro, &d.StaType, &d.StaEtat, &d.StaPays, &d.StaLon, &d.StaLat)
+	}, `select sta_id, sta_name, sta_acro, sta_type, sta_etat, sta_pays, sta_lon, sta_lat from station_info_tide`)
 }
 
 type PsmslData struct {
@@ -208,24 +158,7 @@ type PsmslData struct {
 }
 
 func GetPsmslData() (any, error) {
-	rows, err := TideDB.Query(`select station_name, id, lat, lon, gloss_id, country, date, coastline, station from station_info_psmsl`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		d  PsmslData
-		ds []PsmslData
-	)
-	for rows.Next() {
-		err = rows.Scan(&d.StationName, &d.Id, &d.Lat, &d.Lon, &d.GLOSSID, &d.Country, &d.Date, &d.Coastline, &d.Station)
-		if err != nil {
-			return nil, err
-		}
-		ds = append(ds, d)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return ds, err
+	return queryAll(TideDB, func(rows *sql.Rows, d *PsmslData) error {
+		return rows.Scan(&d.StationName, &d.Id, &d.Lat, &d.Lon, &d.GLOSSID, &d.Country, &d.Date, &d.Coastline, &d.Station)
+	}, `select station_name, id, lat, lon, gloss_id, country, date, coastline, station from station_info_psmsl`)
 }

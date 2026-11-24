@@ -17,7 +17,7 @@ import (
 )
 
 func Test_stationConn(t *testing.T) {
-	db.InitData(t)
+	require.NoError(t, db.ResetFixtures())
 
 	conn1, conn2 := net.Pipe() //conn1: station conn client
 
@@ -100,7 +100,7 @@ func Test_stationConn(t *testing.T) {
 }
 
 func Test_stationConn_OverflowClosesSession(t *testing.T) {
-	db.InitData(t)
+	require.NoError(t, db.ResetFixtures())
 
 	broker := pubsub.NewBroker()
 	conn1, conn2 := net.Pipe()
@@ -144,7 +144,7 @@ func Test_stationConn_OverflowClosesSession(t *testing.T) {
 	// 重放数据写出后，stationConn 还要在同一临界区里完成订阅；拿一次 ingestMu
 	// 等它退出临界区，否则下面的消息可能发布给一个还没有订阅者的 broker。
 	ingestMu.Lock()
-	ingestMu.Unlock()
+	ingestMu.Unlock() //nolint:staticcheck // SA2001: 这里只是等对方离开临界区
 
 	msg := common.SendMsgStruct{
 		Type: common.MsgData,
@@ -155,7 +155,7 @@ func Test_stationConn_OverflowClosesSession(t *testing.T) {
 			},
 		},
 	}
-	for i := 0; i < 20000; i++ {
+	for range 20000 {
 		broker.Publish(msg, nil)
 	}
 

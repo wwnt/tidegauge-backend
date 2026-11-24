@@ -8,17 +8,16 @@ import (
 )
 
 // getStringInBetween Returns empty string if no start string found
-func getStringInBetween(str string, start string, end string) (result string) {
-	s := strings.Index(str, start)
-	if s == -1 {
-		return
+func getStringInBetween(str, start, end string) string {
+	_, rest, ok := strings.Cut(str, start)
+	if !ok {
+		return ""
 	}
-	newStr := str[s+len(start):]
-	e := strings.Index(newStr, end)
-	if e == -1 {
-		return
+	between, _, ok := strings.Cut(rest, end)
+	if !ok {
+		return ""
 	}
-	return newStr[:e]
+	return between
 }
 
 // MergeInfo 把设备的 item 信息合并进站点信息表，校验失败直接终止进程。

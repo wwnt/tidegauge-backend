@@ -94,7 +94,7 @@ func TestTypedDelimitedStreamConcurrentSend(t *testing.T) {
 	recvErr := make(chan error, 1)
 	go func() {
 		got := make(map[string]struct{}, count)
-		for i := 0; i < count; i++ {
+		for range count {
 			frame, err := serverStream.Recv()
 			if err != nil {
 				recvErr <- err
@@ -112,7 +112,7 @@ func TestTypedDelimitedStreamConcurrentSend(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		i := i
 		go func() {
 			defer wg.Done()

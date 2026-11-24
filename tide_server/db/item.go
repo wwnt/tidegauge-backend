@@ -21,34 +21,13 @@ type Item struct {
 }
 
 func GetItems(stationId uuid.UUID) ([]Item, error) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
+	scan := func(rows *sql.Rows, i *Item) error {
+		return rows.Scan(&i.StationId, &i.Name, &i.Type, &i.DeviceName, &i.Status, &i.StatusChangedAt, &i.Available)
+	}
 	if stationId == uuid.Nil {
-		rows, err = TideDB.Query(`select station_id, name, type ,device_name, status, status_changed_at, available!='' from items`)
-	} else {
-		rows, err = TideDB.Query(`select station_id, name, type ,device_name, status, status_changed_at, available!='' from items where station_id=$1`, stationId)
+		return queryAll(TideDB, scan, `select station_id, name, type ,device_name, status, status_changed_at, available!='' from items`)
 	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		i     Item
-		items []Item
-	)
-	for rows.Next() {
-		err = rows.Scan(&i.StationId, &i.Name, &i.Type, &i.DeviceName, &i.Status, &i.StatusChangedAt, &i.Available)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, err
+	return queryAll(TideDB, scan, `select station_id, name, type ,device_name, status, status_changed_at, available!='' from items where station_id=$1`, stationId)
 }
 
 func MakeSureTableExist(name string) (err error) {
@@ -112,33 +91,11 @@ func DelItem(stationId uuid.UUID, name string) (int64, error) {
 }
 
 func GetAvailableItems() ([]common.StationItemStruct, error) {
-	rows, err := TideDB.Query(`select station_id, name from items where available != ''`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-
-	ss, err := scanStationItem(rows)
-	if err != nil {
-		return nil, err
-	}
-	return ss, err
+	return queryAll(TideDB, scanStationItem, `select station_id, name from items where available != ''`)
 }
 
-func scanStationItem(rows *sql.Rows) ([]common.StationItemStruct, error) {
-	var (
-		err error
-		s   common.StationItemStruct
-		ss  []common.StationItemStruct
-	)
-	for rows.Next() {
-		err = rows.Scan(&s.StationId, &s.ItemName)
-		if err != nil {
-			return ss, err
-		}
-		ss = append(ss, s)
-	}
-	return ss, rows.Err()
+func scanStationItem(rows *sql.Rows, s *common.StationItemStruct) error {
+	return rows.Scan(&s.StationId, &s.ItemName)
 }
 
 func UpdateAvailableItems(upstreamId int, newAvail common.UUIDStringsMap) (int64, error) {
@@ -151,25 +108,14 @@ func UpdateAvailableItems(upstreamId int, newAvail common.UUIDStringsMap) (int64
 	defer func() {
 		_ = tx.Rollback()
 	}()
-	rows, err := tx.Query(`select station_id, name from items where available ? $1 and 
+	oldItems, err := queryAll(tx, scanStationItem, `select station_id, name from items where available ? $1 and 
 station_id in (select station_id from upstream_stations where upstream_id=$2)`, strconv.Itoa(upstreamId), upstreamId)
 	if err != nil {
 		return n, err
 	}
-	defer func() { _ = rows.Close() }()
-	var (
-		s   common.StationItemStruct
-		old = make(map[common.StationItemStruct]struct{})
-	)
-	for rows.Next() {
-		err = rows.Scan(&s.StationId, &s.ItemName)
-		if err != nil {
-			return n, err
-		}
+	old := make(map[common.StationItemStruct]struct{}, len(oldItems))
+	for _, s := range oldItems {
 		old[s] = struct{}{}
-	}
-	if err = rows.Err(); err != nil {
-		return n, err
 	}
 	for stationId, items := range newAvail {
 		for _, itemName := range items {

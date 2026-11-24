@@ -18,12 +18,11 @@ import (
 func main() {
 	// 所有致命错误都以非零状态退出：服务单元是 Restart=on-failure，
 	// 以 0 退出（例如启动时监听地址还没就绪）systemd 不会再拉起进程。
-	if err := run(); err != nil {
-		log.Println(err)
-		os.Exit(1)
-	}
+	log.Println(run())
+	os.Exit(1)
 }
 
+// run 只在出错时返回：正常情况下它一直在 accept 循环里。
 func run() error {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	err := os.MkdirAll("log", 0751)

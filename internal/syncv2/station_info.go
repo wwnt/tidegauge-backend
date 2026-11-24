@@ -1,6 +1,7 @@
 package syncv2
 
 import (
+	"maps"
 	"tide/common"
 
 	syncpb "tide/pkg/pb/syncproto"
@@ -14,9 +15,7 @@ func StationInfoToPB(info common.StationInfoStruct) *syncpb.StationInfo {
 	}
 	for deviceName, items := range info.Devices {
 		di := &syncpb.DeviceItems{Items: make(map[string]string, len(items))}
-		for itemType, itemName := range items {
-			di.Items[itemType] = itemName
-		}
+		maps.Copy(di.Items, items)
 		ret.Devices[deviceName] = di
 	}
 	return ret
@@ -30,9 +29,7 @@ func PBToStationInfo(info *syncpb.StationInfo) common.StationInfoStruct {
 	}
 	for deviceName, items := range info.Devices {
 		ret.Devices[deviceName] = make(map[string]string)
-		for itemType, itemName := range items.Items {
-			ret.Devices[deviceName][itemType] = itemName
-		}
+		maps.Copy(ret.Devices[deviceName], items.Items)
 	}
 	return ret
 }

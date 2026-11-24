@@ -240,7 +240,7 @@ func TestUpstreamServer_StreamSync_HandshakeFilterMissDataAndIncremental(t *test
 
 	gotConfig := false
 	gotData := false
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		f, err = downStream.Recv()
 		require.NoError(t, err)
 		switch f.Body.(type) {
@@ -256,7 +256,7 @@ func TestUpstreamServer_StreamSync_HandshakeFilterMissDataAndIncremental(t *test
 	require.True(t, gotData)
 
 	cancel()
-	_ = <-errCh
+	<-errCh
 }
 
 // ---- Downstream tests ----
@@ -677,7 +677,7 @@ func TestRunDownstream_AppliesIncrementalFrames(t *testing.T) {
 	cancel()
 
 	// Connection teardown error is not meaningful for protocol validation.
-	_ = <-downErrCh
+	<-downErrCh
 
 	store.mu.Lock()
 	require.GreaterOrEqual(t, store.updateAvailableCalls, 2) // handshake + incremental update_available

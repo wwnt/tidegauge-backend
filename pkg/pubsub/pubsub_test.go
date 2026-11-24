@@ -74,10 +74,10 @@ func TestDelayedBroker_DeliversInOrderAfterDelay(t *testing.T) {
 	delayed := NewDelayedBroker(broker, delay)
 
 	start := time.Now()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		delayed.Publish(i, nil)
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		select {
 		case got := <-subscriber.Ch:
 			assert.Equal(t, i, got)
@@ -113,7 +113,7 @@ func TestDelayedBroker_PublishWhileQueueDrainsDoesNotDeadlock(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for i := 0; i < total; i++ {
+		for i := range total {
 			delayed.Publish(i, nil)
 			if i%2 == 0 {
 				time.Sleep(delay)
@@ -126,7 +126,7 @@ func TestDelayedBroker_PublishWhileQueueDrainsDoesNotDeadlock(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatal("Publish blocked: delayed broker deadlocked")
 	}
-	for i := 0; i < total; i++ {
+	for i := range total {
 		select {
 		case got := <-subscriber.Ch:
 			if got != i {

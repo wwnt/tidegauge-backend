@@ -1,6 +1,10 @@
 package db
 
-import "github.com/google/uuid"
+import (
+	"database/sql"
+
+	"github.com/google/uuid"
+)
 
 type Upstream struct {
 	Id       int    `json:"id"`
@@ -10,26 +14,9 @@ type Upstream struct {
 }
 
 func GetUpstreams() ([]Upstream, error) {
-	rows, err := TideDB.Query(`select id, username, password, url from upstreams`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		u  Upstream
-		us []Upstream
-	)
-	for rows.Next() {
-		err = rows.Scan(&u.Id, &u.Username, &u.Password, &u.Url)
-		if err != nil {
-			return nil, err
-		}
-		us = append(us, u)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return us, err
+	return queryAll(TideDB, func(rows *sql.Rows, u *Upstream) error {
+		return rows.Scan(&u.Id, &u.Username, &u.Password, &u.Url)
+	}, `select id, username, password, url from upstreams`)
 }
 
 // EditUpstream 新建（Id==0）或修改上游。修改时 Password 为空表示沿用已保存的密码；
@@ -61,25 +48,10 @@ func DelUpstream(id int) ([]uuid.UUID, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := tx.Query(
-		`delete from stations where upstream=true and id not in (select station_id from upstream_stations) returning id`,
-	)
+	ds, err := queryAll(tx, func(rows *sql.Rows, id *uuid.UUID) error {
+		return rows.Scan(id)
+	}, `delete from stations where upstream=true and id not in (select station_id from upstream_stations) returning id`)
 	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		d  uuid.UUID
-		ds []uuid.UUID
-	)
-	for rows.Next() {
-		err = rows.Scan(&d)
-		if err != nil {
-			return nil, err
-		}
-		ds = append(ds, d)
-	}
-	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 	_, err = tx.Exec("delete from upstreams where id=$1", id)
@@ -90,27 +62,10 @@ func DelUpstream(id int) ([]uuid.UUID, error) {
 }
 
 func GetStationsByUpstreamId(upId int) ([]Station, error) {
-	rows, err := TideDB.Query(`select id, identifier, name, ip_addr, location, partner, cameras, status, status_changed_at from stations 
+	return queryAll(TideDB, func(rows *sql.Rows, s *Station) error {
+		return rows.Scan(&s.Id, &s.Identifier, &s.Name, &s.IpAddr, &s.Location, &s.Partner, &s.Cameras, &s.Status, &s.StatusChangedAt)
+	}, `select id, identifier, name, ip_addr, location, partner, cameras, status, status_changed_at from stations 
 inner join upstream_stations on stations.id = upstream_stations.station_id where upstream_stations.upstream_id=$1 and stations.deleted_at is null`, upId)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		s  Station
-		ss []Station
-	)
-	for rows.Next() {
-		err = rows.Scan(&s.Id, &s.Identifier, &s.Name, &s.IpAddr, &s.Location, &s.Partner, &s.Cameras, &s.Status, &s.StatusChangedAt)
-		if err != nil {
-			return nil, err
-		}
-		ss = append(ss, s)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return ss, err
 }
 
 func IsUpstreamStation(stationId uuid.UUID) (upstream bool, err error) {
@@ -119,24 +74,7 @@ func IsUpstreamStation(stationId uuid.UUID) (upstream bool, err error) {
 }
 
 func GetUpstreamsByStationId(stationId uuid.UUID) ([]Upstream, error) {
-	rows, err := TideDB.Query(`select id, username, password, url from upstream_stations join upstreams on upstream_stations.upstream_id = upstreams.id where station_id=$1`, stationId)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		u  Upstream
-		us []Upstream
-	)
-	for rows.Next() {
-		err = rows.Scan(&u.Id, &u.Username, &u.Password, &u.Url)
-		if err != nil {
-			return nil, err
-		}
-		us = append(us, u)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return us, err
+	return queryAll(TideDB, func(rows *sql.Rows, u *Upstream) error {
+		return rows.Scan(&u.Id, &u.Username, &u.Password, &u.Url)
+	}, `select id, username, password, url from upstream_stations join upstreams on upstream_stations.upstream_id = upstreams.id where station_id=$1`, stationId)
 }

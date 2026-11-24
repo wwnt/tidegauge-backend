@@ -53,11 +53,9 @@ func DoUpgrade(ctx context.Context, c *http.Client, url string, h http.Header) (
 		return nil, nil, err
 	}
 
-	if h != nil {
-		for k, vs := range h {
-			for _, v := range vs {
-				req.Header.Add(k, v)
-			}
+	for k, vs := range h {
+		for _, v := range vs {
+			req.Header.Add(k, v)
 		}
 	}
 

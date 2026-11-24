@@ -33,30 +33,9 @@ func GetLocalStationIdByIdentifier(identifier string) (uuid.UUID, error) {
 }
 
 func GetStations() ([]Station, error) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
-	rows, err = TideDB.Query(`select id, identifier, name, ip_addr, location, partner, cameras, status, status_changed_at, upstream from stations where deleted_at is null`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		s  Station
-		ss []Station
-	)
-	for rows.Next() {
-		err = rows.Scan(&s.Id, &s.Identifier, &s.Name, &s.IpAddr, &s.Location, &s.Partner, &s.Cameras, &s.Status, &s.StatusChangedAt, &s.Upstream)
-		if err != nil {
-			return nil, err
-		}
-		ss = append(ss, s)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return ss, err
+	return queryAll(TideDB, func(rows *sql.Rows, s *Station) error {
+		return rows.Scan(&s.Id, &s.Identifier, &s.Name, &s.IpAddr, &s.Location, &s.Partner, &s.Cameras, &s.Status, &s.StatusChangedAt, &s.Upstream)
+	}, `select id, identifier, name, ip_addr, location, partner, cameras, status, status_changed_at, upstream from stations where deleted_at is null`)
 }
 
 func EditStation(s *Station) (err error) {
@@ -87,7 +66,7 @@ func EditStation(s *Station) (err error) {
 		if err = tx.QueryRow("select upstream from stations where id=$1", s.Id).Scan(&s.Upstream); err != nil {
 			return err
 		}
-		if s.Upstream == false {
+		if !s.Upstream {
 			_, err = tx.Exec(`update stations set name=$2,location=coalesce($3,'null'::jsonb),partner=coalesce($4,'null'::jsonb) where id=$1`, s.Id, s.Name, s.Location, s.Partner)
 		} else {
 			_, err = tx.Exec(`update stations set name=$2,partner=coalesce($3,'null'::jsonb) where id=$1`, s.Id, s.Name, s.Partner)

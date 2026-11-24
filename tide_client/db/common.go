@@ -4,12 +4,9 @@ import (
 	"database/sql"
 	"log/slog"
 	"os"
-	"testing"
-	"tide/common"
 	"tide/tide_client/global"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -56,59 +53,5 @@ func InitDB() {
 	if err != nil {
 		slog.Error("Failed to execute database initialization SQL", "error", err)
 		os.Exit(1)
-	}
-}
-
-var (
-	StatusLogs = []common.RowIdItemStatusStruct{
-		{
-			RowId: 1,
-			ItemStatusStruct: common.ItemStatusStruct{
-				ItemName:           "item1",
-				StatusChangeStruct: common.StatusChangeStruct{Status: common.Normal, ChangedAt: 1100},
-			},
-		},
-		{
-			RowId: 2,
-			ItemStatusStruct: common.ItemStatusStruct{
-				ItemName:           "item2",
-				StatusChangeStruct: common.StatusChangeStruct{Status: common.Abnormal, ChangedAt: 1200},
-			},
-		},
-	}
-	DataHis = []common.ItemNameDataTimeStruct{
-		{
-			ItemName:       "item1",
-			DataTimeStruct: common.DataTimeStruct{Value: 1, Millisecond: 1100},
-		},
-		{
-			ItemName:       "item2",
-			DataTimeStruct: common.DataTimeStruct{Value: 1, Millisecond: 1100},
-		},
-	}
-)
-
-func InitData(t *testing.T) {
-	_, err := db.Exec(`
-delete from item_status_log where true;
-drop table if exists item1;
-drop table if exists item2;
-`)
-	require.NoError(t, err)
-
-	for _, statusLog := range StatusLogs {
-		rowId, err := SaveItemStatusLog(statusLog.ItemName, statusLog.Status, statusLog.ChangedAt.ToInt64())
-		require.NoError(t, err)
-		require.EqualValues(t, statusLog.RowId, rowId)
-	}
-	var tmp = make(map[string]struct{})
-	for _, data := range DataHis {
-		if _, ok := tmp[data.ItemName]; !ok {
-			err = MakeSureTableExist(data.ItemName)
-			require.NoError(t, err)
-		}
-		tmp[data.ItemName] = struct{}{}
-		err = SaveData(data.ItemName, data.Value, data.Millisecond.ToInt64())
-		require.NoError(t, err)
 	}
 }

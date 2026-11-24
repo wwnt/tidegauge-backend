@@ -28,34 +28,13 @@ type (
 )
 
 func GetDevices(stationId uuid.UUID) ([]Device, error) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
+	scan := func(rows *sql.Rows, d *Device) error {
+		return rows.Scan(&d.StationId, &d.Name, &d.Specs, &d.LastMaintenance)
+	}
 	if stationId == uuid.Nil {
-		rows, err = TideDB.Query("select station_id, name, specs, last_maintenance from devices")
-	} else {
-		rows, err = TideDB.Query("select station_id, name, specs, last_maintenance from devices where station_id=$1", stationId)
+		return queryAll(TideDB, scan, "select station_id, name, specs, last_maintenance from devices")
 	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		d  Device
-		ds []Device
-	)
-	for rows.Next() {
-		err = rows.Scan(&d.StationId, &d.Name, &d.Specs, &d.LastMaintenance)
-		if err != nil {
-			return nil, err
-		}
-		ds = append(ds, d)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return ds, err
+	return queryAll(TideDB, scan, "select station_id, name, specs, last_maintenance from devices where station_id=$1", stationId)
 }
 
 func EditDevice(d Device) (err error) {
@@ -92,27 +71,10 @@ func DelDevice(stationId uuid.UUID, deviceName string) (int64, error) {
 }
 
 func GetDeviceRecords() ([]DeviceRecord, error) {
-	rows, err := TideDB.Query(`select id, station_id, device_name, record, created_at, updated_at, version from device_record
+	return queryAll(TideDB, func(rows *sql.Rows, dr *DeviceRecord) error {
+		return rows.Scan(&dr.Id, &dr.StationId, &dr.DeviceName, &dr.Record, &dr.CreatedAt, &dr.UpdatedAt, &dr.Version)
+	}, `select id, station_id, device_name, record, created_at, updated_at, version from device_record
 where station_id in (select id from stations where deleted_at is null)`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		dr  DeviceRecord
-		drs []DeviceRecord
-	)
-	for rows.Next() {
-		err = rows.Scan(&dr.Id, &dr.StationId, &dr.DeviceName, &dr.Record, &dr.CreatedAt, &dr.UpdatedAt, &dr.Version)
-		if err != nil {
-			return nil, err
-		}
-		drs = append(drs, dr)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return drs, err
 }
 
 func EditDeviceRecord(dr *DeviceRecord) (err error) {

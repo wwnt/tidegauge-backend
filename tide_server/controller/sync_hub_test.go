@@ -23,7 +23,7 @@ func TestSyncHub_NewSubscriber_NilMessageDoesNotStopWriterLoop(t *testing.T) {
 	subscriber.Ch <- nil
 	subscriber.Ch <- "should-be-written"
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case <-called:
 		case <-time.After(time.Second):

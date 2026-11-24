@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -72,7 +73,7 @@ func RegisterReleaseFunc(f func()) {
 }
 
 func CallReleaseFunc() {
-	for i := len(releaseJobs) - 1; i >= 0; i-- {
-		releaseJobs[i]()
+	for _, releaseJob := range slices.Backward(releaseJobs) {
+		releaseJob()
 	}
 }

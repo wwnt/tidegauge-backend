@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"slices"
 
 	internalsyncv2 "tide/internal/syncv2"
 	"tide/tide_server/auth"
@@ -20,8 +21,8 @@ const cameraLatestSnapshotPath = "/cameraLatestSnapshot"
 type Middleware func(http.Handler) http.Handler
 
 func chain(h http.Handler, middlewares ...Middleware) http.Handler {
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		h = middlewares[i](h)
+	for _, middleware := range slices.Backward(middlewares) {
+		h = middleware(h)
 	}
 	return h
 }

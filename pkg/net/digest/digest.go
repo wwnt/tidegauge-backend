@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 )
@@ -70,9 +71,7 @@ func (t *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 
 	req.Header = make(http.Header)
-	for k, s := range r.Header {
-		req.Header[k] = s
-	}
+	maps.Copy(req.Header, r.Header)
 
 	// Make a request to get the 401 that contains the challenge.
 	res, err := t.Transport.RoundTrip(r)
@@ -188,7 +187,7 @@ func splitDirectives(s string) []string {
 // selectQop 从服务端给出的 qop 选项列表里选出本实现支持的 "auth"；
 // 列表里没有 "auth" 时原样返回，由 authorize 报 ErrAlgNotImplemented。
 func selectQop(options string) string {
-	for _, option := range strings.Split(options, ",") {
+	for option := range strings.SplitSeq(options, ",") {
 		if strings.EqualFold(strings.TrimSpace(option), "auth") {
 			return "auth"
 		}

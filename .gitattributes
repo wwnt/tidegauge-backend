@@ -1,0 +1,7 @@
+# Keep sources LF in the repository and in every checkout;
+# a shell script with CRLF line endings does not run on the Pi.
+*.go    text eol=lf
+*.sh    text eol=lf
+*.proto text eol=lf
+*.mod   text eol=lf
+*.sum   text eol=lf

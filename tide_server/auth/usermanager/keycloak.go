@@ -48,10 +48,7 @@ func (k *Keycloak) adminLogin(ctx context.Context) (string, error) {
 func (k *Keycloak) CheckUserPwd(username, password string) bool {
 	ctx := context.Background()
 	_, err := k.client.Login(ctx, k.clientId, k.clientSecret, k.realm, username, password)
-	if err == nil {
-		return true
-	}
-	return false
+	return err == nil
 }
 
 func (k *Keycloak) Login(r *http.Request, w http.ResponseWriter) {

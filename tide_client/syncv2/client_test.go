@@ -366,7 +366,7 @@ func TestClient_RunOnConn_SnapshotCameraNotFound(t *testing.T) {
 	require.Equal(t, "camera not found", resp.CameraSnapshotResponse.Error)
 
 	cancel()
-	_ = <-clientErrCh
+	<-clientErrCh
 }
 
 func TestClient_RunOnConn_DroppedSubscriberClosesSession(t *testing.T) {

@@ -116,14 +116,12 @@ func mockStationClient(t *testing.T, conn net.Conn, info common.StationInfoStruc
 
 	var missData = make(map[string][]common.DataTimeStruct)
 	for itemName, msec := range itemsLatest {
-		for i := 0; i < 1; i++ {
-			msec++
-			missData[itemName] = append(missData[itemName], common.DataTimeStruct{Value: 1, Millisecond: msec})
-		}
+		msec++
+		missData[itemName] = append(missData[itemName], common.DataTimeStruct{Value: 1, Millisecond: msec})
 	}
 
 	var missStatusLogs []common.RowIdItemStatusStruct
-	for i := 0; i < 1; i++ {
+	{
 		latestStatusLogRowId++
 		missStatusLogs = append(missStatusLogs, common.RowIdItemStatusStruct{
 			RowId: latestStatusLogRowId,

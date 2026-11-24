@@ -121,7 +121,7 @@ func parsePHCParams(s string) (map[string]string, bool) {
 		return nil, false
 	}
 	params := make(map[string]string)
-	for _, item := range strings.Split(s, ",") {
+	for item := range strings.SplitSeq(s, ",") {
 		kv := strings.SplitN(item, "=", 2)
 		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
 			return nil, false

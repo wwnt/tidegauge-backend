@@ -98,26 +98,15 @@ func PruneItemStatusLogAndRecomputeItems(stationId uuid.UUID, rowId int64, all b
 		affectArgs = []any{stationId, rowId}
 	}
 
-	rows, err := tx.Query(`select distinct item_name from item_status_log where `+func() string {
+	affectedItems, err := queryAll(tx, func(rows *sql.Rows, name *string) error {
+		return rows.Scan(name)
+	}, `select distinct item_name from item_status_log where `+func() string {
 		if all {
 			return `station_id=$1`
 		}
 		return `station_id=$1 and row_id>$2`
 	}(), affectArgs...)
 	if err != nil {
-		return 0, err
-	}
-	var affectedItems []string
-	for rows.Next() {
-		var name string
-		if err = rows.Scan(&name); err != nil {
-			_ = rows.Close()
-			return 0, err
-		}
-		affectedItems = append(affectedItems, name)
-	}
-	_ = rows.Close()
-	if err = rows.Err(); err != nil {
 		return 0, err
 	}
 
@@ -154,41 +143,17 @@ func PagedItemStatusLogs(pageNum, pageSize uint) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := TideDB.Query("select station_id, item_name, status, changed_at from item_status_log order by changed_at desc limit $1 offset $2", pageSize, (pageNum-1)*pageSize)
+	ds.Data, err = queryAll(TideDB, func(rows *sql.Rows, d *common.StationIdItemStatusStruct) error {
+		return rows.Scan(&d.StationId, &d.ItemName, &d.Status, &d.ChangedAt)
+	}, "select station_id, item_name, status, changed_at from item_status_log order by changed_at desc limit $1 offset $2", pageSize, (pageNum-1)*pageSize)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	var d common.StationIdItemStatusStruct
-	for rows.Next() {
-		err = rows.Scan(&d.StationId, &d.ItemName, &d.Status, &d.ChangedAt)
-		if err != nil {
-			return nil, err
-		}
-		ds.Data = append(ds.Data, d)
-	}
-	return ds, rows.Err()
+	return ds, nil
 }
 
 func GetItemStatusLogs(stationId uuid.UUID, after int64) ([]common.RowIdItemStatusStruct, error) {
-	rows, err := TideDB.Query(`select row_id, item_name, status, changed_at from item_status_log where station_id=$1 and row_id>$2 order by row_id`, stationId, after)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var (
-		h  common.RowIdItemStatusStruct
-		hs []common.RowIdItemStatusStruct
-	)
-	for rows.Next() {
-		err = rows.Scan(&h.RowId, &h.ItemName, &h.Status, &h.ChangedAt)
-		if err != nil {
-			return nil, err
-		}
-		hs = append(hs, h)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return hs, err
+	return queryAll(TideDB, func(rows *sql.Rows, h *common.RowIdItemStatusStruct) error {
+		return rows.Scan(&h.RowId, &h.ItemName, &h.Status, &h.ChangedAt)
+	}, `select row_id, item_name, status, changed_at from item_status_log where station_id=$1 and row_id>$2 order by row_id`, stationId, after)
 }

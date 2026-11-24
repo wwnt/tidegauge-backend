@@ -2,14 +2,17 @@ package db
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"tide/common"
 )
 
 func TestGetDataHistory(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 	type args struct {
 		itemName string
 		start    int64
@@ -39,7 +42,7 @@ func TestGetDataHistory(t *testing.T) {
 }
 
 func TestGetItemStatusLogAfter(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 	type args struct {
 		after int64
 	}
@@ -63,7 +66,7 @@ func TestGetItemStatusLogAfter(t *testing.T) {
 }
 
 func TestGetItemsLatestStatus(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 	tests := []struct {
 		name    string
 		want    []common.ItemStatusStruct
@@ -74,7 +77,7 @@ func TestGetItemsLatestStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := GetItemsLatestStatus()
-			if !tt.wantErr(t, err, fmt.Sprintf("GetItemsLatestStatus()")) {
+			if !tt.wantErr(t, err, "GetItemsLatestStatus()") {
 				return
 			}
 			assert.Equalf(t, tt.want, got, "GetItemsLatestStatus()")
@@ -83,7 +86,7 @@ func TestGetItemsLatestStatus(t *testing.T) {
 }
 
 func TestSaveItemStatusLog(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 	type args struct {
 		itemName  string
 		status    common.Status
@@ -109,7 +112,7 @@ func TestSaveItemStatusLog(t *testing.T) {
 }
 
 func TestSaveData(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 	type args struct {
 		itemName string
 		val      float64
@@ -130,7 +133,7 @@ func TestSaveData(t *testing.T) {
 }
 
 func TestCleanItemStatusLog(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 	// 种子是 rowid 1(item1, 1100)、rowid 2(item2, 1200)；再给 item1 追加两次翻转。
 	for _, changedAt := range []int64{1300, 1400} {
 		if _, err := SaveItemStatusLog("item1", common.Abnormal, changedAt); err != nil {
@@ -190,7 +193,7 @@ func TestCleanItemStatusLog(t *testing.T) {
 
 // 清理批次按 1000 行切分；积压超过一批时也必须删干净并保留每个 item 的最新行。
 func TestCleanItemStatusLogMultipleBatches(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 	const backlog = cleanStatusLogBatchSize*2 + 50
 	tx, err := db.Begin()
 	if err != nil {
@@ -219,7 +222,7 @@ func TestCleanItemStatusLogMultipleBatches(t *testing.T) {
 }
 
 func TestCleanDBDataRejectsIllegalItemName(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 
 	err := CleanDBData(0, []string{"item1\"; drop table item1"})
 	if err == nil {
@@ -233,7 +236,7 @@ func TestCleanDBDataRejectsIllegalItemName(t *testing.T) {
 
 // 一张表出错不能让其余表和状态日志的清理被跳过。
 func TestCleanDBDataContinuesAfterTableError(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 	if _, err := SaveItemStatusLog("item1", common.Abnormal, 1300); err != nil {
 		t.Fatalf("seed status log: %v", err)
 	}
@@ -297,7 +300,7 @@ func TestPathFromDSN(t *testing.T) {
 // TestCleanDBDataCleansOrphanTables 覆盖设备/item 改名或移除后的场景：遗留的旧数据表
 // 不在配置清单里，也必须按保留期清理，否则 data.db 只增不减。
 func TestCleanDBDataCleansOrphanTables(t *testing.T) {
-	InitData(t)
+	require.NoError(t, ResetFixtures())
 
 	// 造一张孤儿表：结构是数据表，但不在本次配置清单里。
 	const orphan = "item_orphan_old_name"

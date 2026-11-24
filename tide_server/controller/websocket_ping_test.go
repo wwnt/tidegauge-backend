@@ -77,8 +77,7 @@ func TestWebsocketPingKeepsResponsiveConnectionAlive(t *testing.T) {
 	wsURL, cancelled := startPingTestServer(t, interval, 200*time.Millisecond)
 	ws := dialPingTestConn(t, wsURL)
 
-	readCtx, readCancel := context.WithCancel(context.Background())
-	defer readCancel()
+	readCtx := t.Context()
 	go func() {
 		for {
 			if _, _, err := ws.Read(readCtx); err != nil {
