@@ -162,6 +162,24 @@ This sample config file exists under [`devices.uart`](#devicesuart--tcp--gpio), 
 
 These are the uart configurations. In this example it will be read in [tide_client/controller/add_uart_devices.go](../../tide_client/controller/add_uart_devices.go)
 
+### Automatic reopen of a silent connection
+
+A connection is reopened on I/O errors, and also when it has gone silent: after 5 consecutive
+requests that received no reply at all (not a single byte), tide_client closes the serial port
+(or the TCP connection), waits one second and opens it again. This recovers a USB-serial
+adapter that stopped receiving and a microcontroller that hung, neither of which reports an
+error on this side:
+
+- Reopening a serial port pulses DTR. A board with an auto-reset circuit, such as an Arduino
+  connected through its own USB port, is reset by that pulse. A board wired through a separate
+  USB-TTL adapter without DTR is not reset.
+- Any received byte counts as a sign of life. One dead sensor on a shared bus does not cause a
+  reopen while the other devices on that bus still answer.
+- While the connection stays silent the threshold doubles after every reopen (5, 10, 20, 40,
+  then every 80 requests), so the port of an unplugged sensor is not reopened in a tight loop.
+
+Each reopen is logged as `Reopening UART port` / `Reconnecting TCP endpoint` with the reason.
+
 ## config
 
 According to the value of [model](#port--read_timeout--mode--model), it corresponds to the configuration of different devices.

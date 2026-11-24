@@ -24,6 +24,8 @@ type Tcp struct {
 	inReconnect atomic.Bool
 }
 
+var _ connWrap.Reopener = (*Tcp)(nil)
+
 func StartTcp(addr string, readTimeout uint32) (connWrap.ConnCommon, error) {
 	c := &Tcp{
 		addr:        addr,
@@ -43,6 +45,9 @@ func (c *Tcp) reopenUntilSuccess() {
 
 	if conn := c.loadConn(); conn != nil {
 		_ = conn.Close()
+		// 对端的串口转发程序在连接断开时关闭串口、新连接进来时再打开；
+		// 留出间隔的原因见 connWrap.ReopenPause。
+		time.Sleep(connWrap.ReopenPause)
 	}
 	for {
 		if err := c.open(); err != nil {
@@ -54,6 +59,15 @@ func (c *Tcp) reopenUntilSuccess() {
 		slog.Info("Connected to TCP endpoint", "addr", c.addr)
 		return
 	}
+}
+
+// Reopen 在后台断开并重新建立连接，立即返回。实现 connWrap.Reopener。
+//
+// 用于"读写都不报错、但对端一直不回话"的情况，见 connWrap.Bus。对端是串口转发程序时，
+// 重新连接会让它重新打开串口，效果与直连串口时重开端口相同。
+func (c *Tcp) Reopen(reason string) {
+	slog.Warn("Reconnecting TCP endpoint", "addr", c.addr, "reason", reason)
+	go c.reopenUntilSuccess()
 }
 
 func (c *Tcp) open() (err error) {

@@ -46,7 +46,13 @@ type Uart struct {
 	connClosed  bool
 	readTimeout time.Duration
 	inReconnect atomic.Bool
+	// reopenPause 是关闭旧端口到打开新端口之间的间隔，见 connWrap.ReopenPause。
+	reopenPause time.Duration
+	// openPort 打开串口，nil 表示用 serial.Open。测试用它换掉真实串口。
+	openPort func(name string, mode *serial.Mode) (serial.Port, error)
 }
+
+var _ connWrap.Reopener = (*Uart)(nil)
 
 // errPortClosed 表示端口已关闭、正在后台重连；调用方按一次普通的传输失败处理。
 var errPortClosed = fmt.Errorf("uart port is reconnecting: %w", os.ErrClosed)
@@ -56,6 +62,7 @@ func StartUart(name string, readTimeout uint32, mode Mode) (connWrap.ConnCommon,
 		portName:    name,
 		conn:        nil,
 		readTimeout: time.Duration(readTimeout) * time.Millisecond,
+		reopenPause: connWrap.ReopenPause,
 		mode: serial.Mode{
 			BaudRate: mode.BaudRate,
 			DataBits: mode.DataBits,
@@ -73,7 +80,9 @@ func (c *Uart) reopenUntilSuccess() {
 	}
 	defer c.inReconnect.Store(false)
 
-	c.closeCurrent()
+	if c.closeCurrent() {
+		time.Sleep(c.reopenPause)
+	}
 	for {
 		if err := c.open(); err != nil {
 			slog.Error("Failed to connect to UART port", "port", c.portName, "error", err)
@@ -86,7 +95,18 @@ func (c *Uart) reopenUntilSuccess() {
 	}
 }
 
-// closeCurrent 关闭当前端口并把它标记为已关闭。
+// Reopen 在后台关闭并重新打开串口，立即返回。实现 connWrap.Reopener。
+//
+// 读写出错时本类型会自己重连；这个入口留给上层处理"什么错都不报、但对端就是不回话"
+// 的情况：串口转接芯片的接收卡住，或者它后面的单片机死机，在这一侧看到的都只是超时。
+// 重开端口会重新配置转接芯片，并在 DTR 上产生一次脉冲——带自动复位电路的板子
+// （Arduino）会因此复位，效果和重启本进程相同。
+func (c *Uart) Reopen(reason string) {
+	slog.Warn("Reopening UART port", "port", c.portName, "reason", reason)
+	go c.reopenUntilSuccess()
+}
+
+// closeCurrent 关闭当前端口并把它标记为已关闭，返回是否真的关闭了一个端口。
 //
 // 已关闭的端口对象仍然保持发布，直到新端口打开：并发的 Read 拿到的是它，会得到
 // 端口自己的"已关闭"错误，而不是空指针。但 Write/ResetInputBuffer 不能再碰它——
@@ -94,18 +114,23 @@ func (c *Uart) reopenUntilSuccess() {
 // 而 fd 号在关闭后会被下一次 open() 复用（多总线站点上就是另一条总线的串口），
 // 结果是清空别的总线的输入缓冲、把本总线的请求字节写到别的总线上。
 // 持写锁完成关闭，保证没有正在进行中的 Write/ResetInputBuffer 跨过关闭点。
-func (c *Uart) closeCurrent() {
+func (c *Uart) closeCurrent() bool {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
 	if c.conn == nil || c.connClosed {
-		return
+		return false
 	}
 	c.connClosed = true
 	_ = c.conn.Close()
+	return true
 }
 
 func (c *Uart) open() error {
-	port, err := serial.Open(c.portName, &c.mode)
+	openPort := c.openPort
+	if openPort == nil {
+		openPort = serial.Open
+	}
+	port, err := openPort(c.portName, &c.mode)
 	if err != nil {
 		return err
 	}

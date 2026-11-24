@@ -208,3 +208,36 @@ func TestGetDataHoldsBusAfterParseError(t *testing.T) {
 		t.Fatalf("bus unlocked after %v, want at least 800ms settle time", lockedAfter)
 	}
 }
+
+// reopenableConn 是支持重开的 stubConnCommon，记录被要求重开的次数。
+type reopenableConn struct {
+	stubConnCommon
+	reopens int
+}
+
+func (c *reopenableConn) Reopen(string) { c.reopens++ }
+
+// 现场事故的复现：Arduino 不再回任何字节，每次 C! 都只是读超时，串口本身不报错。
+// 连续 DefaultSilentRequestLimit 次之后必须要求传输层重开端口，否则会一直超时到进程重启。
+func TestConcurrentMeasurementReopensTransportThatStoppedAnswering(t *testing.T) {
+	rawConn := &reopenableConn{}
+	for range connWrap.DefaultSilentRequestLimit {
+		rawConn.readResults = append(rawConn.readResults, stubReadResult{err: connWrap.ErrTimeout})
+	}
+	session := NewSession(connWrap.NewBusWithQuietTime(rawConn, 0), ModeArduino)
+
+	for attempt := 1; attempt <= connWrap.DefaultSilentRequestLimit; attempt++ {
+		err := session.ConcurrentMeasurement("1", 4, "100505\r\n", 0)
+		if !errors.Is(err, connWrap.ErrTimeout) {
+			t.Fatalf("attempt %d: error = %v, want a timeout", attempt, err)
+		}
+
+		wantReopens := 0
+		if attempt == connWrap.DefaultSilentRequestLimit {
+			wantReopens = 1
+		}
+		if rawConn.reopens != wantReopens {
+			t.Fatalf("attempt %d: transport reopened %d times, want %d", attempt, rawConn.reopens, wantReopens)
+		}
+	}
+}
